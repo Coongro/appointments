@@ -1,0 +1,22 @@
+{
+  "id": "appointments",
+  "version": "0.1.0",
+  "apiVersion": "2.0",
+  "assets": {
+    "styles": [
+      "./dist/assets/tailwind.css",
+      "./dist/assets/fontawesome/css/all.min.css"
+    ]
+  },
+  "contributes": {
+    "menus": [],
+    "views": [],
+    "repositories": [
+      {
+        "module": "./dist/repositories/appointment.repository.js",
+        "export": "AppointmentRepository",
+        "prefix": "appointments"
+      }
+    ]
+  }
+}
