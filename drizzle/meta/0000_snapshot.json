@@ -27,8 +27,20 @@
           "primaryKey": false,
           "notNull": true
         },
+        "pet_id": {
+          "name": "pet_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
         "staff_id": {
           "name": "staff_id",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "consultation_id": {
+          "name": "consultation_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
