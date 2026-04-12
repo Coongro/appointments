@@ -2,7 +2,7 @@
   "name": "@coongro/appointments",
   "version": "0.1.0",
   "type": "module",
-  "description": "Módulo genérico de turnos. Sin vistas ni menús. Exporta AppointmentScheduler, hooks y repositorio para uso en otros plugins.",
+  "description": "Gestión de turnos veterinarios. Agenda diaria, scheduler y flujo turno→consulta.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -44,6 +44,9 @@
   },
   "dependencies": {
     "@coongro/calendar": ">=0.1.0",
+    "@coongro/consultations": ">=0.1.0",
+    "@coongro/contacts": ">=1.0.0",
+    "@coongro/patients": ">=0.1.0",
     "@coongro/staff": ">=0.1.0"
   },
   "peerDependencies": {

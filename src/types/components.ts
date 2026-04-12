@@ -8,8 +8,10 @@ export interface AppointmentSchedulerProps {
   defaultDate?: string;
   /** Pre-fill: ID del staff member */
   defaultStaffId?: string;
-  /** Pre-fill: ID del contacto (cliente) */
+  /** Pre-fill: ID del contacto (dueño) */
   defaultContactId?: string;
+  /** Pre-fill: ID del paciente (mascota) */
+  defaultPetId?: string;
   /** Callback al agendar exitosamente */
   onScheduled?: (appointment: Appointment) => void;
   /** Callback al cancelar */

@@ -3,8 +3,8 @@
  */
 import { getHostReact, actions } from '@coongro/plugin-sdk';
 
-import type { AppointmentFilters, SortDirection } from '../types/filters.js';
 import type { Appointment } from '../types/appointment.js';
+import type { AppointmentFilters, SortDirection } from '../types/filters.js';
 
 const React = getHostReact();
 const { useState, useEffect, useCallback, useRef } = React;
@@ -67,7 +67,7 @@ export function useAppointments(options: UseAppointmentsOptions = {}): UseAppoin
       if (result.length < pageSize) {
         setTotal((page - 1) * pageSize + result.length);
       } else {
-        setTotal(Math.max(total, page * pageSize + 1));
+        setTotal((prev) => Math.max(prev, page * pageSize + 1));
       }
     } catch (err) {
       if (!mountedRef.current) return;

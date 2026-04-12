@@ -9,8 +9,21 @@
     ]
   },
   "contributes": {
-    "menus": [],
-    "views": [],
+    "menus": [
+      {
+        "path": "Consultas/Agenda",
+        "order": 0,
+        "viewId": "appointments.agenda.open"
+      }
+    ],
+    "views": [
+      {
+        "id": "appointments.agenda.open",
+        "title": "Agenda de Turnos",
+        "component": "./dist/views/agenda/index.js",
+        "export": "AgendaView"
+      }
+    ],
     "repositories": [
       {
         "module": "./dist/repositories/appointment.repository.js",
