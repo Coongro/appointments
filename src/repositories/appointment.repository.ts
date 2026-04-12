@@ -1,7 +1,8 @@
-import { contactTable } from '@coongro/contacts/server';
-import { staffMemberTable } from '@coongro/staff/server';
 import { eventTable } from '@coongro/calendar/server';
+import { contactTable } from '@coongro/contacts/server';
+import { petTable } from '@coongro/patients/server';
 import type { ModuleDatabaseAPI } from '@coongro/plugin-sdk';
+import { staffMemberTable } from '@coongro/staff/server';
 import { eq, and, or, ilike, asc, desc, gte, lte, sql } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/pg-core';
 
@@ -16,6 +17,7 @@ export interface SearchParams {
   status?: string;
   staffId?: string;
   contactId?: string;
+  petId?: string;
   from?: string;
   to?: string;
   limit?: number;
@@ -24,11 +26,14 @@ export interface SearchParams {
   orderDir?: 'asc' | 'desc';
 }
 
-/** Fila enriquecida con datos del contacto, staff y evento */
+/** Fila enriquecida con datos del contacto, paciente, staff y evento */
 export interface EnrichedAppointmentRow extends AppointmentRow {
   contact_name: string;
   contact_email: string | null;
   contact_phone: string | null;
+  pet_name: string | null;
+  pet_species: string | null;
+  pet_breed: string | null;
   staff_name: string | null;
   staff_role: string | null;
   event_start_at: string | null;
@@ -48,7 +53,9 @@ export class AppointmentRepository {
       id: appointmentTable.id,
       calendar_event_id: appointmentTable.calendar_event_id,
       contact_id: appointmentTable.contact_id,
+      pet_id: appointmentTable.pet_id,
       staff_id: appointmentTable.staff_id,
+      consultation_id: appointmentTable.consultation_id,
       status: appointmentTable.status,
       reason: appointmentTable.reason,
       notes: appointmentTable.notes,
@@ -58,6 +65,9 @@ export class AppointmentRepository {
       contact_name: contactTable.name,
       contact_email: contactTable.email,
       contact_phone: contactTable.phone,
+      pet_name: petTable.name,
+      pet_species: petTable.species,
+      pet_breed: petTable.breed,
       staff_name: staffContactTable.name,
       staff_role: staffMemberTable.role,
       event_start_at: eventTable.start_at,
@@ -66,9 +76,11 @@ export class AppointmentRepository {
     } as const;
   }
 
+  /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
   private applyJoins<T>(q: T): T {
     return (q as any)
       .leftJoin(contactTable, eq(appointmentTable.contact_id, sql`${contactTable.id}::text`))
+      .leftJoin(petTable, eq(appointmentTable.pet_id, sql`${petTable.id}::text`))
       .leftJoin(staffMemberTable, eq(appointmentTable.staff_id, sql`${staffMemberTable.id}::text`))
       .leftJoin(
         staffContactTable,
@@ -97,9 +109,7 @@ export class AppointmentRepository {
   }
 
   async create({ data }: { data: NewAppointmentRow }): Promise<AppointmentRow[]> {
-    return this.db.ormQuery((tx) =>
-      tx.insert(appointmentTable).values(data).returning()
-    );
+    return this.db.ormQuery((tx) => tx.insert(appointmentTable).values(data).returning());
   }
 
   async update({
@@ -119,22 +129,14 @@ export class AppointmentRepository {
   }
 
   async delete({ id }: { id: string }): Promise<void> {
-    await this.db.ormQuery((tx) =>
-      tx.delete(appointmentTable).where(eq(appointmentTable.id, id))
-    );
+    await this.db.ormQuery((tx) => tx.delete(appointmentTable).where(eq(appointmentTable.id, id)));
   }
 
   // ---------------------------------------------------------------------------
   // Actualizar estado
   // ---------------------------------------------------------------------------
 
-  async updateStatus({
-    id,
-    status,
-  }: {
-    id: string;
-    status: string;
-  }): Promise<AppointmentRow[]> {
+  async updateStatus({ id, status }: { id: string; status: string }): Promise<AppointmentRow[]> {
     return this.update({ id, data: { status } });
   }
 
@@ -147,6 +149,7 @@ export class AppointmentRepository {
     status,
     staffId,
     contactId,
+    petId,
     from,
     to,
     limit,
@@ -162,6 +165,7 @@ export class AppointmentRepository {
         conditions.push(
           or(
             ilike(contactTable.name, pattern),
+            ilike(petTable.name, pattern),
             ilike(appointmentTable.reason, pattern),
             ilike(appointmentTable.notes, pattern),
             ilike(staffContactTable.name, pattern)
@@ -181,6 +185,10 @@ export class AppointmentRepository {
         conditions.push(eq(appointmentTable.contact_id, contactId));
       }
 
+      if (petId) {
+        conditions.push(eq(appointmentTable.pet_id, petId));
+      }
+
       if (from) {
         conditions.push(gte(eventTable.start_at, from));
       }
@@ -193,6 +201,7 @@ export class AppointmentRepository {
       q = this.applyJoins(q);
 
       if (conditions.length > 0) {
+        // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
         q = q.where(and(...conditions)) as typeof q;
       }
 
@@ -258,11 +267,7 @@ export class AppointmentRepository {
     return this.search({ staffId, from, to, orderBy: 'date', orderDir: 'asc' });
   }
 
-  async listByContact({
-    contactId,
-  }: {
-    contactId: string;
-  }): Promise<EnrichedAppointmentRow[]> {
+  async listByContact({ contactId }: { contactId: string }): Promise<EnrichedAppointmentRow[]> {
     return this.search({ contactId, orderBy: 'date', orderDir: 'desc' });
   }
 }
