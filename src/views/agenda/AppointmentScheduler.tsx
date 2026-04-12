@@ -662,7 +662,11 @@ export function AppointmentScheduler({
     ),
     React.createElement(
       UI.Button,
-      { variant: 'brand', onClick: handleSubmit, disabled: creating || updating || !selectedPet },
+      {
+        variant: 'brand',
+        onClick: () => void handleSubmit(),
+        disabled: creating || updating || !selectedPet,
+      },
       creating || updating
         ? isEditing
           ? 'Guardando...'

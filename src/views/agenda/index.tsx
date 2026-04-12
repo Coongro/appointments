@@ -272,7 +272,7 @@ export function AgendaView() {
             ),
             React.createElement(
               UI.Button,
-              { variant: 'destructive', onClick: handleConfirmCancel },
+              { variant: 'destructive', onClick: () => void handleConfirmCancel() },
               'Sí, cancelar turno'
             )
           )
@@ -306,7 +306,7 @@ export function AgendaView() {
             ),
             React.createElement(
               UI.Button,
-              { variant: 'destructive', onClick: handleConfirmNoShow },
+              { variant: 'destructive', onClick: () => void handleConfirmNoShow() },
               'Sí, no asistió'
             )
           )
