@@ -1,5 +1,11 @@
 # @coongro/appointments
 
+## 0.2.1
+
+### Patch Changes
+
+- 0ab5012: fix: sidebar UX, ServiceLineForm, undefined time, species icon
+
 ## 0.2.0
 
 ### Minor Changes
