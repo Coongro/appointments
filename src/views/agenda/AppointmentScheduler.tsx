@@ -5,10 +5,13 @@
  * Referencia: design/scheduler-desktop.html
  */
 import { DatePicker, TimePicker, toDateString } from '@coongro/calendar';
+import { ServiceLineForm, ROOT_SERVICE_CATEGORY_SLUG } from '@coongro/consultations';
+import type { ServiceLineInput } from '@coongro/consultations';
 import { useContact } from '@coongro/contacts';
 import { PetPicker, SPECIES_ICON, formatSpecies } from '@coongro/patients';
 import type { Pet } from '@coongro/patients';
 import { getHostReact, getHostUI, usePlugin, actions } from '@coongro/plugin-sdk';
+import type { Product, Category } from '@coongro/products';
 import { StaffPicker } from '@coongro/staff';
 import type { StaffMember } from '@coongro/staff';
 
@@ -18,20 +21,7 @@ import type { Appointment } from '../../types/appointment.js';
 import { getInitials } from '../../utils/helpers.js';
 
 const React = getHostReact();
-const { useState, useCallback, useEffect } = React;
-
-// Categorias de motivo de consulta (veterinaria)
-const REASON_CATEGORIES = [
-  { value: 'vaccination', label: 'Vacunacion' },
-  { value: 'checkup', label: 'Control' },
-  { value: 'surgery', label: 'Cirugia' },
-  { value: 'grooming', label: 'Peluqueria' },
-  { value: 'emergency', label: 'Urgencia' },
-  { value: 'deworming', label: 'Desparasitacion' },
-  { value: 'dental', label: 'Odontologia' },
-  { value: 'imaging', label: 'Estudios' },
-  { value: 'other', label: 'Otro' },
-];
+const { useState, useCallback, useEffect, useRef, useMemo } = React;
 
 interface SchedulerProps {
   open: boolean;
@@ -63,14 +53,37 @@ export function AppointmentScheduler({
   const [ownerContactId, setOwnerContactId] = useState<string | null>(null);
   const [date, setDate] = useState(defaultDate ?? toDateString(new Date()));
   const [startTime, setStartTime] = useState(
-    defaultHour !== null ? `${String(defaultHour).padStart(2, '0')}:00` : '09:00'
+    defaultHour !== null && defaultHour !== undefined
+      ? `${String(defaultHour).padStart(2, '0')}:00`
+      : '09:00'
   );
   const [endTime, setEndTime] = useState(
-    defaultHour !== null ? `${String(defaultHour).padStart(2, '0')}:30` : '09:30'
+    defaultHour !== null && defaultHour !== undefined
+      ? `${String(defaultHour).padStart(2, '0')}:30`
+      : '09:30'
   );
-  const [category, setCategory] = useState('');
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
+  const [serviceLines, setServiceLines] = useState<ServiceLineInput[]>([]);
+  const [serviceCatalog, setServiceCatalog] = useState<Product[]>([]);
+  const [serviceCategories, setServiceCategories] = useState<Category[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(true);
+  const catalogLoadedRef = useRef(false);
+
+  // Auto-rellenar motivo desde servicios seleccionados
+  const reasonAutoRef = useRef(true);
+  useEffect(() => {
+    if (!reasonAutoRef.current) return;
+    const names = serviceLines
+      .filter((s) => s.product_name.trim())
+      .map((s) => s.product_name.trim());
+    setReason(names.join(', '));
+  }, [serviceLines]);
+
+  const handleReasonChange = useCallback((e: { target: { value: string } }) => {
+    reasonAutoRef.current = false;
+    setReason(e.target.value);
+  }, []);
 
   // Resolver dueno: Pet.owner_id → VetOwner.contact_id → Contact
   useEffect(() => {
@@ -89,6 +102,46 @@ export function AppointmentScheduler({
 
   // Hook de contacts para obtener nombre/telefono del dueno
   const { contact: ownerContact } = useContact(ownerContactId);
+
+  // Cargar catalogo de servicios
+  useEffect(() => {
+    if (catalogLoadedRef.current) return;
+    catalogLoadedRef.current = true;
+    void (async () => {
+      try {
+        const cats = await actions.execute<Category[]>('products.categories.listTree');
+        setServiceCategories(cats);
+        const root = cats.find((c: Category) => c.slug === ROOT_SERVICE_CATEGORY_SLUG);
+        if (!root) {
+          setCatalogLoading(false);
+          return;
+        }
+        const serviceIds = new Set<string>([
+          root.id,
+          ...cats.filter((c: Category) => c.parent_id === root.id).map((c: Category) => c.id),
+        ]);
+        const all = await actions.execute<Product[]>('products.items.search', {
+          limit: 300,
+          isActive: true,
+        });
+        setServiceCatalog(all.filter((p: Product) => serviceIds.has(p.category_id ?? '')));
+      } catch {
+        /* Sin catalogo */
+      } finally {
+        setCatalogLoading(false);
+      }
+    })();
+  }, []);
+
+  const serviceSubcategories = useMemo(() => {
+    const root = serviceCategories.find((c: Category) => c.slug === ROOT_SERVICE_CATEGORY_SLUG);
+    if (!root) return [];
+    return serviceCategories.filter((c: Category) => c.parent_id === root.id);
+  }, [serviceCategories]);
+
+  const handleProductCreated = useCallback((product: Product) => {
+    setServiceCatalog((prev) => [...prev, product]);
+  }, []);
 
   // Reset cuando se abre — precargar datos en modo edición
   useEffect(() => {
@@ -110,11 +163,11 @@ export function AppointmentScheduler({
           `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
         );
       }
-      // reason puede ser "Categoria: detalle" — separar
-      const parts = editAppointment.reason?.split(': ') ?? [];
-      const matchedCat = REASON_CATEGORIES.find((c) => c.label === parts[0]);
-      setCategory(matchedCat?.value ?? '');
-      setReason(matchedCat ? parts.slice(1).join(': ') : (editAppointment.reason ?? ''));
+      setReason(editAppointment.reason ?? '');
+      // Cargar servicios desde metadata
+      const meta = editAppointment.metadata as { services?: ServiceLineInput[] } | null;
+      setServiceLines(meta?.services ?? []);
+      reasonAutoRef.current = false;
       setNotes(editAppointment.notes ?? '');
 
       // Fetchear pet y staff completos para mostrar las cards visuales
@@ -142,11 +195,12 @@ export function AppointmentScheduler({
       setSelectedPet(null);
       setSelectedStaff(null);
       setOwnerContactId(null);
-      setCategory('');
       setReason('');
       setNotes('');
+      setServiceLines([]);
+      reasonAutoRef.current = true;
       setDate(defaultDate ?? toDateString(new Date()));
-      if (defaultHour !== null) {
+      if (defaultHour !== null && defaultHour !== undefined) {
         setStartTime(`${String(defaultHour).padStart(2, '0')}:00`);
         setEndTime(`${String(defaultHour).padStart(2, '0')}:30`);
       }
@@ -165,14 +219,8 @@ export function AppointmentScheduler({
   const handleSubmit = useCallback(async () => {
     if (!selectedPet) return;
 
-    const fullReason = [
-      category ? REASON_CATEGORIES.find((c) => c.value === category)?.label : null,
-      reason,
-    ]
-      .filter(Boolean)
-      .join(': ');
-
-    const eventTitle = [selectedPet.name, fullReason].filter(Boolean).join(' — ') || 'Turno';
+    const eventTitle = [selectedPet.name, reason].filter(Boolean).join(' — ') || 'Turno';
+    const validServices = serviceLines.filter((s) => s.product_name.trim());
     const startAt = new Date(`${date}T${startTime}:00`).toISOString();
     const endAt = new Date(`${date}T${endTime}:00`).toISOString();
 
@@ -195,8 +243,9 @@ export function AppointmentScheduler({
         contact_id: ownerContactId ?? selectedPet.owner_id,
         pet_id: selectedPet.id,
         staff_id: selectedStaff?.id ?? null,
-        reason: fullReason || null,
+        reason: reason || null,
         notes: notes || null,
+        metadata: validServices.length > 0 ? { services: validServices } : null,
       });
 
       if (result) {
@@ -226,18 +275,19 @@ export function AppointmentScheduler({
         contact_id: ownerContactId ?? selectedPet.owner_id,
         pet_id: selectedPet.id,
         staff_id: selectedStaff?.id ?? null,
-        reason: fullReason || null,
+        reason: reason || null,
         notes: notes || null,
         calendar_event_id: calendarEventId,
+        metadata: validServices.length > 0 ? { services: validServices } : null,
       });
 
       if (result) {
         setSelectedPet(null);
         setSelectedStaff(null);
         setOwnerContactId(null);
-        setCategory('');
         setReason('');
         setNotes('');
+        setServiceLines([]);
         onSuccess?.();
         onClose();
       }
@@ -246,8 +296,8 @@ export function AppointmentScheduler({
     selectedPet,
     ownerContactId,
     selectedStaff,
-    category,
     reason,
+    serviceLines,
     notes,
     date,
     startTime,
@@ -432,7 +482,6 @@ export function AppointmentScheduler({
     [member.specialty ?? member.role].filter(Boolean).join(' · ') || '';
 
   const dateTimeGrid = isMobile ? '1fr' : '1fr 1fr 1fr';
-  const reasonGrid = isMobile ? '1fr' : '1fr 1fr';
 
   // ── Body ──
   const body = React.createElement(
@@ -565,57 +614,48 @@ export function AppointmentScheduler({
     sectionLabel('FileText', 'Motivo'),
     React.createElement(
       'div',
-      { style: { display: 'grid', gridTemplateColumns: reasonGrid, gap: '12px' } },
+      null,
       React.createElement(
-        'div',
-        null,
-        React.createElement(
-          'label',
-          {
-            style: {
-              fontSize: '12px',
-              fontWeight: '500',
-              color: 'var(--cg-text-secondary)',
-              display: 'block',
-              marginBottom: '4px',
-            },
+        'label',
+        {
+          style: {
+            fontSize: '12px',
+            fontWeight: '500',
+            color: 'var(--cg-text-secondary)',
+            display: 'block',
+            marginBottom: '4px',
           },
-          'Categoria'
-        ),
-        React.createElement(
-          UI.Select,
-          {
-            value: category,
-            onValueChange: (v: string) => setCategory(v),
-            placeholder: 'Seleccionar',
-          },
-          ...REASON_CATEGORIES.map((c) =>
-            React.createElement(UI.SelectItem, { key: c.value, value: c.value }, c.label)
-          )
-        )
+        },
+        'Motivo de la consulta'
       ),
-      React.createElement(
-        'div',
-        null,
-        React.createElement(
-          'label',
-          {
-            style: {
-              fontSize: '12px',
-              fontWeight: '500',
-              color: 'var(--cg-text-secondary)',
-              display: 'block',
-              marginBottom: '4px',
-            },
-          },
-          'Detalle (opcional)'
-        ),
-        React.createElement(UI.Input, {
-          value: reason,
-          onChange: (e: { target: { value: string } }) => setReason(e.target.value),
-          placeholder: 'Ej: Triple felina',
-        })
-      )
+      React.createElement(UI.Input, {
+        value: reason,
+        onChange: handleReasonChange,
+        placeholder: 'Ej: Control anual, vacunacion, urgencia...',
+      })
+    ),
+
+    // ── 4b. Servicios ──
+    sectionLabel('Receipt', 'Servicios'),
+    React.createElement(
+      'div',
+      {
+        style: {
+          border: '1px solid var(--cg-border)',
+          borderRadius: '7px',
+          padding: '12px',
+          background: 'var(--cg-surface)',
+        },
+      },
+      React.createElement(ServiceLineForm, {
+        services: serviceLines,
+        onChange: setServiceLines,
+        catalog: serviceCatalog,
+        categories: serviceSubcategories,
+        catalogLoading,
+        onProductCreated: handleProductCreated,
+        showPrices: true,
+      })
     ),
 
     // ── 5. Notas ──
