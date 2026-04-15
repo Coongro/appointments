@@ -57,6 +57,9 @@
       ],
       "@coongro/consultations": [
         "../consultations/dist/index.d.ts"
+      ],
+      "@coongro/products": [
+        "../products/dist/index.d.ts"
       ]
     }
   },

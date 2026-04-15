@@ -1,10 +1,12 @@
 import { formatEventTime, getDayName, getMonthName } from '@coongro/calendar';
 import { CreateConsultationButton } from '@coongro/consultations';
+import type { ServiceLineInput } from '@coongro/consultations';
+import { SPECIES_ICON } from '@coongro/patients';
 import { getHostReact, getHostUI } from '@coongro/plugin-sdk';
 
 import type { Appointment } from '../../types/appointment.js';
 import { getInitials } from '../../utils/helpers.js';
-import { CloseIcon, PawIcon, PersonIcon, ClockIcon } from '../../utils/icons.js';
+import { CloseIcon, PersonIcon, ClockIcon } from '../../utils/icons.js';
 import { STATUS_LABELS, STATUS_BADGE_STYLES, STATUS_DOT_STYLES } from '../../utils/status.js';
 
 const React = getHostReact();
@@ -83,134 +85,151 @@ export function AppointmentSidebar({
         </UI.SheetHeader>
 
         <UI.SheetBody>
-          {/* Status pill */}
-          <div>
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '5px',
-                padding: '4px 12px',
-                borderRadius: '20px',
-                fontSize: '12px',
-                fontWeight: 500,
-                ...pillStyle,
-              }}
-            >
-              <span style={{ width: '6px', height: '6px', borderRadius: '50%', ...dotStyle }} />
-              {STATUS_LABELS[status]}
-            </span>
-          </div>
-
-          {/* Paciente */}
-          <SidebarSection label="Paciente">
-            <SidebarRow
-              icon={
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: 'var(--cg-teal-lt)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    color: 'var(--cg-teal-dk)',
-                  }}
-                >
-                  {PawIcon}
-                </div>
-              }
-              primary={appointment.pet_name ?? '—'}
-              secondary={
-                [appointment.pet_species, appointment.pet_breed].filter(Boolean).join(' · ') ||
-                undefined
-              }
-            />
-          </SidebarSection>
-
-          {/* Dueno */}
-          <SidebarSection label="Dueno">
-            <SidebarRow
-              icon={<SbIcon>{PersonIcon}</SbIcon>}
-              primary={appointment.contact_name}
-              secondary={
-                [appointment.contact_phone, appointment.contact_email]
-                  .filter(Boolean)
-                  .join(' · ') || undefined
-              }
-            />
-          </SidebarSection>
-
-          <div style={{ height: '1px', background: 'var(--cg-border)' }} />
-
-          {/* Horario */}
-          <SidebarSection label="Horario">
-            <SidebarRow
-              icon={<SbIcon>{ClockIcon}</SbIcon>}
-              primary={`${startTime} – ${endTime}`}
-              secondary={dateLabel}
-            />
-          </SidebarSection>
-
-          {/* Veterinario */}
-          <SidebarSection label="Veterinario">
-            <SidebarRow
-              icon={
-                <div
-                  style={{
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%',
-                    background: 'var(--cg-green-bg)',
-                    color: 'var(--cg-green)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '12px',
-                    fontWeight: 700,
-                    flexShrink: 0,
-                  }}
-                >
-                  {initials}
-                </div>
-              }
-              primary={appointment.staff_name ?? '—'}
-              secondary={appointment.staff_role ?? undefined}
-            />
-          </SidebarSection>
-
-          <div style={{ height: '1px', background: 'var(--cg-border)' }} />
-
-          {/* Motivo */}
-          {appointment.reason && (
-            <SidebarSection label="Motivo">
-              <div
-                style={{ marginTop: '4px', fontSize: '13px', color: 'var(--cg-text-secondary)' }}
-              >
-                {appointment.reason}
-              </div>
-            </SidebarSection>
-          )}
-
-          {/* Notas */}
-          {appointment.notes && (
-            <SidebarSection label="Notas">
-              <div
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            {/* Status pill */}
+            <div>
+              <span
                 style={{
-                  padding: '10px 12px',
-                  background: 'var(--cg-bg)',
-                  borderRadius: '7px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  padding: '4px 12px',
+                  borderRadius: '20px',
                   fontSize: '12px',
-                  color: 'var(--cg-text-secondary)',
-                  lineHeight: 1.5,
+                  fontWeight: 500,
+                  ...pillStyle,
                 }}
               >
-                {appointment.notes}
-              </div>
-            </SidebarSection>
-          )}
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', ...dotStyle }} />
+                {STATUS_LABELS[status]}
+              </span>
+            </div>
+
+            {/* Grupo: Paciente + Dueño */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <SidebarSection label="Paciente">
+                <SidebarRow
+                  icon={
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'var(--cg-teal-lt)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0,
+                        color: 'var(--cg-teal-dk)',
+                      }}
+                    >
+                      {React.createElement(UI.DynamicIcon, {
+                        icon: SPECIES_ICON[appointment.pet_species ?? ''] ?? 'PawPrint',
+                        size: 16,
+                      })}
+                    </div>
+                  }
+                  primary={appointment.pet_name ?? '—'}
+                  secondary={
+                    [appointment.pet_species, appointment.pet_breed].filter(Boolean).join(' · ') ||
+                    undefined
+                  }
+                />
+              </SidebarSection>
+
+              <SidebarSection label="Dueño">
+                <SidebarRow
+                  icon={<SbIcon>{PersonIcon}</SbIcon>}
+                  primary={appointment.contact_name}
+                  secondary={
+                    [appointment.contact_phone, appointment.contact_email]
+                      .filter(Boolean)
+                      .join(' · ') || undefined
+                  }
+                />
+              </SidebarSection>
+            </div>
+
+            <div style={{ height: '1px', background: 'var(--cg-border)' }} />
+
+            {/* Grupo: Horario + Veterinario */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <SidebarSection label="Horario">
+                <SidebarRow
+                  icon={<SbIcon>{ClockIcon}</SbIcon>}
+                  primary={`${startTime} – ${endTime}`}
+                  secondary={dateLabel}
+                />
+              </SidebarSection>
+
+              <SidebarSection label="Veterinario">
+                <SidebarRow
+                  icon={
+                    <div
+                      style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: 'var(--cg-green-bg)',
+                        color: 'var(--cg-green)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: '12px',
+                        fontWeight: 700,
+                        flexShrink: 0,
+                      }}
+                    >
+                      {initials}
+                    </div>
+                  }
+                  primary={appointment.staff_name ?? '—'}
+                  secondary={appointment.staff_role ?? undefined}
+                />
+              </SidebarSection>
+            </div>
+
+            {/* Motivo + Notas */}
+            {(appointment.reason || appointment.notes) && (
+              <>
+                <div style={{ height: '1px', background: 'var(--cg-border)' }} />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  {appointment.reason && (
+                    <SidebarSection label="Motivo">
+                      <div
+                        style={{
+                          marginTop: '4px',
+                          fontSize: '13px',
+                          color: 'var(--cg-text-secondary)',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {appointment.reason}
+                      </div>
+                    </SidebarSection>
+                  )}
+
+                  {appointment.notes && (
+                    <SidebarSection label="Notas">
+                      <div
+                        style={{
+                          marginTop: '4px',
+                          padding: '10px 12px',
+                          background: 'var(--cg-bg)',
+                          borderRadius: '7px',
+                          fontSize: '12px',
+                          color: 'var(--cg-text-secondary)',
+                          lineHeight: 1.5,
+                        }}
+                      >
+                        {appointment.notes}
+                      </div>
+                    </SidebarSection>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         </UI.SheetBody>
 
         {/* Footer: acciones */}
@@ -226,9 +245,32 @@ export function AppointmentSidebar({
               gap: '8px',
             }}
           >
+            <button
+              onClick={() => setConsultationOpen(true)}
+              style={{
+                width: '100%',
+                padding: '12px',
+                fontFamily: 'var(--cg-font-body)',
+                fontWeight: 700,
+                fontSize: '14px',
+                borderRadius: '7px',
+                cursor: 'pointer',
+                textAlign: 'center',
+                background: 'var(--cg-accent)',
+                color: '#fff',
+                border: 'none',
+              }}
+            >
+              Atender — Abrir consulta
+            </button>
             {React.createElement(CreateConsultationButton, {
               petId: appointment.pet_id ?? undefined,
-              label: 'Atender — Abrir consulta',
+              defaults: {
+                staff_id: appointment.staff_id ?? undefined,
+                vet_name: appointment.staff_name ?? '',
+                reason: appointment.reason ?? '',
+                services: (appointment.metadata as { services?: ServiceLineInput[] })?.services,
+              },
               open: consultationOpen,
               onOpenChange: setConsultationOpen,
               onSuccess: (c: { id: string }) => {
