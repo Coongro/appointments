@@ -1,6 +1,7 @@
-import { formatEventTime, getDayName, getMonthName } from '@coongro/calendar';
+import { formatEventTime, getDayName, getMonthName, useTenantTimezone } from '@coongro/calendar';
 import { CreateConsultationButton } from '@coongro/consultations';
 import type { ServiceLineInput } from '@coongro/consultations';
+import { utcToLocal } from '@coongro/datetime';
 import { SPECIES_ICON } from '@coongro/patients';
 import { getHostReact, getHostUI } from '@coongro/plugin-sdk';
 
@@ -33,6 +34,7 @@ export function AppointmentSidebar({
   onReschedule,
 }: AppointmentSidebarProps) {
   const UI = getHostUI();
+  const tz = useTenantTimezone();
 
   const [consultationOpen, setConsultationOpen] = React.useState(false);
 
@@ -42,12 +44,14 @@ export function AppointmentSidebar({
   const pillStyle = STATUS_BADGE_STYLES[status] ?? STATUS_BADGE_STYLES.scheduled;
   const dotStyle = STATUS_DOT_STYLES[status] ?? STATUS_DOT_STYLES.scheduled;
 
-  const startDate = appointment.event_start_at ? new Date(appointment.event_start_at) : null;
-  const startTime = appointment.event_start_at ? formatEventTime(appointment.event_start_at) : '—';
-  const endTime = appointment.event_end_at ? formatEventTime(appointment.event_end_at) : '—';
+  const startLocal = appointment.event_start_at ? utcToLocal(appointment.event_start_at, tz) : null;
+  const startTime = appointment.event_start_at
+    ? formatEventTime(appointment.event_start_at, tz)
+    : '—';
+  const endTime = appointment.event_end_at ? formatEventTime(appointment.event_end_at, tz) : '—';
 
-  const dateLabel = startDate
-    ? `${getDayName(startDate).slice(0, 3)} ${startDate.getDate().toString().padStart(2, '0')} ${getMonthName(startDate.getMonth())} ${startDate.getFullYear()}`
+  const dateLabel = startLocal
+    ? `${getDayName(startLocal.toJSDate()).slice(0, 3)} ${String(startLocal.day).padStart(2, '0')} ${getMonthName(startLocal.month - 1)} ${startLocal.year}`
     : '—';
 
   const initials = appointment.staff_name ? getInitials(appointment.staff_name) : '??';

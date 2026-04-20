@@ -4,8 +4,9 @@
  * para mostrar cards de appointment con info veterinaria.
  * Referencia: design/agenda-day-desktop.html + design/agenda-day-mobile.html
  */
-import { CalendarView, EventCard } from '@coongro/calendar';
+import { CalendarView, EventCard, useTenantTimezone } from '@coongro/calendar';
 import type { CalendarEvent, EventRenderContext } from '@coongro/calendar';
+import { formatLocalTime } from '@coongro/datetime';
 import { getHostReact, getHostUI, actions } from '@coongro/plugin-sdk';
 
 import { useAppointmentMutations } from '../../hooks/useAppointmentMutations.js';
@@ -22,6 +23,7 @@ const { useState, useCallback, useMemo } = React;
 
 export function AgendaView() {
   const UI = getHostUI();
+  const tz = useTenantTimezone();
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
@@ -260,7 +262,7 @@ export function AgendaView() {
           React.createElement(
             'p',
             { style: { fontSize: '14px', color: 'var(--cg-text-secondary)' } },
-            `¿Estás seguro de cancelar el turno de ${confirmCancel.pet_name ?? '—'} (${confirmCancel.event_start_at ? new Date(confirmCancel.event_start_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '—'})?`
+            `¿Estás seguro de cancelar el turno de ${confirmCancel.pet_name ?? '—'} (${confirmCancel.event_start_at ? formatLocalTime(confirmCancel.event_start_at, tz) : '—'})?`
           ),
           React.createElement(
             'div',
@@ -294,7 +296,7 @@ export function AgendaView() {
           React.createElement(
             'p',
             { style: { fontSize: '14px', color: 'var(--cg-text-secondary)' } },
-            `¿Marcar el turno de ${confirmNoShow.pet_name ?? '—'} (${confirmNoShow.event_start_at ? new Date(confirmNoShow.event_start_at).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' }) : '—'}) como no asistió?`
+            `¿Marcar el turno de ${confirmNoShow.pet_name ?? '—'} (${confirmNoShow.event_start_at ? formatLocalTime(confirmNoShow.event_start_at, tz) : '—'}) como no asistió?`
           ),
           React.createElement(
             'div',

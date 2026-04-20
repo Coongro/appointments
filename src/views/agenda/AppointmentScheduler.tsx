@@ -4,10 +4,11 @@
  * DatePicker y TimePicker (@coongro/calendar).
  * Referencia: design/scheduler-desktop.html
  */
-import { DatePicker, TimePicker, toDateString } from '@coongro/calendar';
+import { DatePicker, TimePicker, toDateString, useTenantTimezone } from '@coongro/calendar';
 import { ServiceLineForm, ROOT_SERVICE_CATEGORY_SLUG } from '@coongro/consultations';
 import type { ServiceLineInput } from '@coongro/consultations';
 import { useContact } from '@coongro/contacts';
+import { formatLocalTime, localToUTC, toDateKey } from '@coongro/datetime';
 import { PetPicker, SPECIES_ICON, formatSpecies } from '@coongro/patients';
 import type { Pet } from '@coongro/patients';
 import { getHostReact, getHostUI, usePlugin, actions } from '@coongro/plugin-sdk';
@@ -44,6 +45,7 @@ export function AppointmentScheduler({
   const UI = getHostUI();
   const { toast } = usePlugin();
   const isMobile = useIsMobile();
+  const tz = useTenantTimezone();
   const { create, update, creating, updating } = useAppointmentMutations();
   const isEditing = !!editAppointment;
 
@@ -151,17 +153,11 @@ export function AppointmentScheduler({
       const startAt = editAppointment.event_start_at;
       const endAt = editAppointment.event_end_at;
       if (startAt) {
-        const d = new Date(startAt);
-        setDate(toDateString(d));
-        setStartTime(
-          `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-        );
+        setDate(toDateKey(startAt, tz));
+        setStartTime(formatLocalTime(startAt, tz));
       }
       if (endAt) {
-        const d = new Date(endAt);
-        setEndTime(
-          `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
-        );
+        setEndTime(formatLocalTime(endAt, tz));
       }
       setReason(editAppointment.reason ?? '');
       // Cargar servicios desde metadata
@@ -221,8 +217,8 @@ export function AppointmentScheduler({
 
     const eventTitle = [selectedPet.name, reason].filter(Boolean).join(' — ') || 'Turno';
     const validServices = serviceLines.filter((s) => s.product_name.trim());
-    const startAt = new Date(`${date}T${startTime}:00`).toISOString();
-    const endAt = new Date(`${date}T${endTime}:00`).toISOString();
+    const startAt = localToUTC(date, startTime, tz);
+    const endAt = localToUTC(date, endTime, tz);
 
     if (isEditing && editAppointment) {
       // Modo edición: actualizar evento de calendario + appointment

@@ -3,7 +3,8 @@
  * Cards apilados por grupo horario con time markers sticky.
  * Referencia: design/agenda-day-mobile.html
  */
-import { formatEventTime } from '@coongro/calendar';
+import { formatEventTime, useTenantTimezone } from '@coongro/calendar';
+import { utcToLocal } from '@coongro/datetime';
 import { getHostReact } from '@coongro/plugin-sdk';
 
 import type { Appointment } from '../../types/appointment.js';
@@ -50,9 +51,10 @@ export function AgendaTimeline({
   onAttend,
   onSlotClick,
 }: AgendaTimelineProps) {
-  const now = new Date();
-  const nowHour = now.getHours();
-  const nowMin = now.getMinutes();
+  const tz = useTenantTimezone();
+  const nowLocal = utcToLocal(new Date(), tz);
+  const nowHour = nowLocal.hour;
+  const nowMin = nowLocal.minute;
 
   // Agrupar appointments por hora y detectar huecos
   const groups: TimeGroup[] = useMemo(() => {
@@ -60,7 +62,7 @@ export function AgendaTimeline({
     const byHour = new Map<number, Appointment[]>();
     for (const a of appointments) {
       if (!a.event_start_at) continue;
-      const h = new Date(a.event_start_at).getHours();
+      const h = utcToLocal(a.event_start_at, tz).hour;
       if (!byHour.has(h)) byHour.set(h, []);
       byHour.get(h).push(a);
     }
@@ -104,7 +106,7 @@ export function AgendaTimeline({
     }
 
     return result;
-  }, [appointments, nowHour, nowMin]);
+  }, [appointments, nowHour, nowMin, tz]);
 
   // Paw icon SVG string
   const pawIcon = React.createElement(
@@ -187,8 +189,8 @@ export function AgendaTimeline({
           const status = appt.status;
           const badgeStyle = STATUS_BADGE_STYLES[status];
           const dotStyle = STATUS_DOT_STYLES[status];
-          const startTime = appt.event_start_at ? formatEventTime(appt.event_start_at) : '';
-          const endTime = appt.event_end_at ? formatEventTime(appt.event_end_at) : '';
+          const startTime = appt.event_start_at ? formatEventTime(appt.event_start_at, tz) : '';
+          const endTime = appt.event_end_at ? formatEventTime(appt.event_end_at, tz) : '';
           const isCurrentSlot = group.isNow && status === 'scheduled';
           const vetInitials = appt.staff_name ? getInitials(appt.staff_name) : '';
 

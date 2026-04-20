@@ -3,7 +3,7 @@
  * Reutiliza DayColumn de @coongro/calendar con renderEvent custom
  * para mostrar las cards de appointment con info veterinaria.
  */
-import { DayColumn, toDateString, formatEventTime } from '@coongro/calendar';
+import { DayColumn, toDateString, formatEventTime, useTenantTimezone } from '@coongro/calendar';
 import type { CalendarEvent } from '@coongro/calendar';
 import { getHostReact } from '@coongro/plugin-sdk';
 
@@ -34,6 +34,7 @@ export function AgendaDayGrid({
   onSlotClick,
   selectedId,
 }: AgendaDayGridProps) {
+  const tz = useTenantTimezone();
   const events = useMemo(() => toCalendarEvents(appointments), [appointments]);
   const appointmentMap = useMemo(() => buildAppointmentMap(appointments), [appointments]);
 
@@ -54,8 +55,8 @@ export function AgendaDayGrid({
 
       const status = appt.status;
       const isSelected = selectedId === appt.id;
-      const startTime = appt.event_start_at ? formatEventTime(appt.event_start_at) : '';
-      const endTime = appt.event_end_at ? formatEventTime(appt.event_end_at) : '';
+      const startTime = appt.event_start_at ? formatEventTime(appt.event_start_at, tz) : '';
+      const endTime = appt.event_end_at ? formatEventTime(appt.event_end_at, tz) : '';
       const blockStyle = STATUS_BLOCK_STYLES[status];
 
       return React.createElement(
@@ -152,7 +153,7 @@ export function AgendaDayGrid({
           )
       );
     },
-    [appointmentMap, selectedId, onAppointmentClick]
+    [appointmentMap, selectedId, onAppointmentClick, tz]
   );
 
   const dateStr = toDateString(date);
