@@ -18,7 +18,7 @@ export function toCalendarEvents(appointments: Appointment[]): CalendarEvent[] {
       end_at: a.event_end_at,
       status: a.status === 'scheduled' ? 'confirmed' : a.status,
       color: STATUS_EVENT_COLORS[a.status],
-    })) as CalendarEvent[];
+    })) as unknown as CalendarEvent[];
 }
 
 /** Crea un Map<id, Appointment> para lookup rapido. */
