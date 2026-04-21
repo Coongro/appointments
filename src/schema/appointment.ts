@@ -15,10 +15,10 @@ export const appointmentTable = pgTable('module_appointments_appointments', {
   reason: text('reason'),
   notes: text('notes'),
   metadata: jsonb('metadata'),
-  created_at: timestamp('created_at', { mode: 'string' })
+  created_at: timestamp('created_at', { mode: 'date', withTimezone: true })
     .notNull()
     .default(sql`now()`),
-  updated_at: timestamp('updated_at', { mode: 'string' })
+  updated_at: timestamp('updated_at', { mode: 'date', withTimezone: true })
     .notNull()
     .default(sql`now()`),
 });

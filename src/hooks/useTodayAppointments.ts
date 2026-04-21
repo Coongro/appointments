@@ -1,6 +1,7 @@
 /**
  * Hook para obtener los turnos de hoy, ordenados por hora del evento.
  */
+import { useTenantTimezone } from '@coongro/calendar';
 import { getHostReact, actions } from '@coongro/plugin-sdk';
 
 import type { Appointment } from '../types/appointment.js';
@@ -16,6 +17,7 @@ export interface UseTodayAppointmentsResult {
 }
 
 export function useTodayAppointments(): UseTodayAppointmentsResult {
+  const tz = useTenantTimezone();
   const [data, setData] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +34,7 @@ export function useTodayAppointments(): UseTodayAppointmentsResult {
     setLoading(true);
     setError(null);
     try {
-      const result = await actions.execute<Appointment[]>('appointments.listToday', {});
+      const result = await actions.execute<Appointment[]>('appointments.listToday', { tz });
       if (!mountedRef.current) return;
       setData(result);
     } catch (err) {
@@ -42,7 +44,7 @@ export function useTodayAppointments(): UseTodayAppointmentsResult {
     } finally {
       if (mountedRef.current) setLoading(false);
     }
-  }, []);
+  }, [tz]);
 
   useEffect(() => {
     void fetch();

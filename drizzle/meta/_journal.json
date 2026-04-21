@@ -8,6 +8,13 @@
       "when": 1775431189046,
       "tag": "0000_silent_lenny_balinger",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1776560000000,
+      "tag": "0001_strict_datetime",
+      "breakpoints": true
     }
   ]
 }

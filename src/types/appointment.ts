@@ -2,6 +2,7 @@
  * Tipos de dominio para appointments.
  * Los datos de contacto y staff vienen de los plugins vinculados.
  */
+import type { UTCTimestamp } from '@coongro/datetime';
 
 export type AppointmentStatus = 'scheduled' | 'completed' | 'cancelled' | 'no_show';
 
@@ -16,22 +17,18 @@ export interface Appointment {
   reason: string | null;
   notes: string | null;
   metadata: Record<string, unknown> | null;
-  created_at: string;
-  updated_at: string;
-  // Datos resueltos del contacto (dueño)
+  created_at: UTCTimestamp;
+  updated_at: UTCTimestamp;
   contact_name: string;
   contact_email: string | null;
   contact_phone: string | null;
-  // Datos resueltos del paciente (mascota)
   pet_name: string | null;
   pet_species: string | null;
   pet_breed: string | null;
-  // Datos resueltos del staff (profesional)
   staff_name: string | null;
   staff_role: string | null;
-  // Datos resueltos del evento de calendario
-  event_start_at: string | null;
-  event_end_at: string | null;
+  event_start_at: UTCTimestamp | null;
+  event_end_at: UTCTimestamp | null;
   event_title: string | null;
 }
 
