@@ -32,5 +32,15 @@ export type {
   UseAppointmentsByStaffResult,
 } from './hooks/useAppointmentsByStaff.js';
 
+// Utilities
+export { toCalendarEvents, buildAppointmentMap, getInitials } from './utils/helpers.js';
+export {
+  STATUS_LABELS,
+  STATUS_BLOCK_STYLES,
+  STATUS_BADGE_STYLES,
+  STATUS_DOT_STYLES,
+  STATUS_EVENT_COLORS,
+} from './utils/status.js';
+
 // Components (se agregarán después del diseño HTML)
 // export { AppointmentScheduler } from './components/AppointmentScheduler.js';

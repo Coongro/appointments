@@ -1,6 +1,6 @@
 {
   "id": "appointments",
-  "version": "0.1.0",
+  "version": "0.4.0",
   "apiVersion": "2.0",
   "assets": {
     "styles": [
@@ -9,8 +9,21 @@
     ]
   },
   "contributes": {
-    "menus": [],
-    "views": [],
+    "menus": [
+      {
+        "path": "Consultas/Agenda",
+        "order": 0,
+        "viewId": "appointments.agenda.open"
+      }
+    ],
+    "views": [
+      {
+        "id": "appointments.agenda.open",
+        "title": "Agenda de Turnos",
+        "component": "./dist/views/agenda/index.js",
+        "export": "AgendaView"
+      }
+    ],
     "repositories": [
       {
         "module": "./dist/repositories/appointment.repository.js",

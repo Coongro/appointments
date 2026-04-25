@@ -8,6 +8,7 @@ export interface AppointmentFilters {
   status?: string;
   staffId?: string;
   contactId?: string;
+  petId?: string;
   from?: string;
   to?: string;
   limit?: number;

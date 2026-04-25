@@ -43,11 +43,26 @@
       "@coongro/calendar/server": [
         "../calendar/dist/server.d.ts"
       ],
+      "@coongro/patients": [
+        "../patients/dist/index.d.ts"
+      ],
+      "@coongro/patients/server": [
+        "../patients/dist/server.d.ts"
+      ],
       "@coongro/staff": [
         "../staff/dist/index.d.ts"
       ],
       "@coongro/staff/server": [
         "../staff/dist/server.d.ts"
+      ],
+      "@coongro/consultations": [
+        "../consultations/dist/index.d.ts"
+      ],
+      "@coongro/products": [
+        "../products/dist/index.d.ts"
+      ],
+      "@coongro/datetime": [
+        "../../packages/datetime/dist/index.d.ts"
       ]
     }
   },

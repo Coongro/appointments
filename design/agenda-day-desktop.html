@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agenda del día — Desktop</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@400;700;900&family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --gold: #F5A800; --gold-lt: #FFFBF0; --gold-hover: #E09800;
+      --ink: #1A1916; --ink-2: #3A3731; --ink-3: #6B6760; --ink-4: #9B9893;
+      --bg: #F6F5F1; --surface: #FFFFFF; --border: #E8E7E2; --border-md: #D4D3CC;
+      --teal-dk: #4E8C78; --teal-lt: #EDF5F2;
+      --green: #3D9A5C; --green-lt: #EEFAF3;
+      --red: #C8423A; --red-lt: #FEF2F2;
+      --r-xl: 18px; --r-md: 10px; --r-sm: 7px;
+      --font-serif: 'Noto Serif JP', serif; --font-body: 'Roboto', sans-serif;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: var(--font-body); background: var(--bg); color: var(--ink); }
+
+    .page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+    /* ── Top bar ─────────────────────────────────────────── */
+    .top-bar {
+      padding: 14px 28px; background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .top-left { display: flex; align-items: center; gap: 16px; }
+    .page-title { font-family: var(--font-serif); font-weight: 900; font-size: 22px; }
+    .date-nav { display: flex; align-items: center; gap: 8px; }
+    .nav-btn {
+      width: 30px; height: 30px; border: 1px solid var(--border);
+      border-radius: var(--r-sm); background: var(--surface);
+      cursor: pointer; display: flex; align-items: center; justify-content: center;
+    }
+    .nav-btn:hover { border-color: var(--border-md); }
+    .nav-btn svg { width: 14px; height: 14px; color: var(--ink-3); }
+    .date-label { font-size: 14px; font-weight: 500; min-width: 180px; text-align: center; }
+    .today-btn {
+      padding: 5px 14px; font-size: 12px; font-weight: 500;
+      border: 1px solid var(--border); border-radius: var(--r-sm);
+      background: transparent; cursor: pointer; color: var(--ink-2); font-family: var(--font-body);
+    }
+    .today-btn:hover { border-color: var(--gold); color: var(--gold); }
+
+    .top-right { display: flex; align-items: center; gap: 10px; }
+    .view-toggle { display: flex; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+    .view-btn {
+      padding: 6px 14px; font-size: 12px; font-weight: 500;
+      border: none; background: transparent; cursor: pointer;
+      color: var(--ink-3); font-family: var(--font-body);
+    }
+    .view-btn.active { background: var(--ink); color: white; }
+    .view-btn + .view-btn { border-left: 1px solid var(--border); }
+    .btn-gold {
+      font-family: var(--font-body); font-weight: 700; font-size: 13px;
+      padding: 8px 18px; border-radius: var(--r-sm); cursor: pointer;
+      background: var(--gold); color: white; border: 1px solid var(--gold);
+      display: flex; align-items: center; gap: 6px;
+    }
+    .btn-gold:hover { background: var(--gold-hover); }
+    .btn-gold svg { width: 14px; height: 14px; }
+
+    /* ── Calendar body ─────────────────────────────────────── */
+    .calendar-body { flex: 1; display: flex; overflow: hidden; }
+
+    /* Time gutter */
+    .time-gutter {
+      width: 60px; flex-shrink: 0; border-right: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .time-label {
+      height: 80px; display: flex; align-items: flex-start; justify-content: flex-end;
+      padding: 0 8px; font-size: 11px; color: var(--ink-4); font-weight: 500;
+      transform: translateY(-7px);
+    }
+
+    /* Day column */
+    .day-col { flex: 1; position: relative; overflow-y: auto; background: var(--surface); }
+    .hour-row { height: 80px; border-bottom: 1px solid var(--border); position: relative; }
+    .hour-half { position: absolute; top: 50%; left: 0; right: 0; border-bottom: 1px dashed #EEEDE8; }
+
+    /* Now line */
+    .now-line {
+      position: absolute; left: 0; right: 0; z-index: 5;
+      display: flex; align-items: center;
+    }
+    .now-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); margin-left: -4px; }
+    .now-rule { flex: 1; height: 2px; background: var(--red); }
+
+    /* Empty slot (dashed) */
+    .empty-slot {
+      position: absolute; left: 8px; right: 8px;
+      border: 1px dashed var(--border-md); border-radius: var(--r-sm);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; color: var(--ink-4); cursor: pointer; transition: all 150ms;
+    }
+    .empty-slot:hover { border-color: var(--gold); background: var(--gold-lt); color: var(--gold-hover); }
+
+    /* ── Appointment blocks ───────────────────────────────── */
+    .appt {
+      position: absolute; left: 8px; right: 8px;
+      border-radius: var(--r-sm); padding: 7px 10px;
+      cursor: pointer; overflow: hidden; border-left: 3px solid; z-index: 2;
+      transition: box-shadow 150ms;
+    }
+    .appt:hover { box-shadow: 0 2px 8px rgba(0,0,0,0.07); }
+    .appt.selected { box-shadow: 0 0 0 2px var(--gold); }
+
+    .appt-scheduled { background: #FFF3CC; border-left-color: #D4A800; }
+    .appt-completed { background: var(--green-lt); border-left-color: var(--green); }
+    .appt-cancelled { background: #F3F4F6; border-left-color: #9CA3AF; }
+    .appt-no-show { background: var(--red-lt); border-left-color: var(--red); }
+
+    .appt-row { display: flex; align-items: center; justify-content: space-between; }
+    .appt-time { font-size: 10px; font-weight: 700; color: var(--ink-2); }
+    .appt-badge {
+      font-size: 9px; font-weight: 600; padding: 1px 6px;
+      border-radius: 10px; letter-spacing: 0.2px;
+    }
+    .b-scheduled { background: rgba(212,168,0,0.15); color: #8A6800; }
+    .b-completed { background: rgba(61,154,92,0.15); color: var(--green); }
+
+    .appt-patient { font-size: 13px; font-weight: 500; margin-top: 1px; }
+    .appt-meta { font-size: 11px; color: var(--ink-3); }
+    .appt-vet { display: flex; align-items: center; gap: 4px; font-size: 10px; color: var(--ink-3); margin-top: 2px; }
+    .vet-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+    /* ── Sidebar ───────────────────────────────────────────── */
+    .sidebar {
+      width: 320px; flex-shrink: 0; border-left: 1px solid var(--border);
+      background: var(--surface); overflow-y: auto; display: flex; flex-direction: column;
+    }
+    .sb-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .sb-title { font-family: var(--font-serif); font-weight: 700; font-size: 15px; }
+    .sb-close {
+      width: 24px; height: 24px; border: none; background: transparent;
+      cursor: pointer; color: var(--ink-4); border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .sb-close svg { width: 14px; height: 14px; }
+
+    .sb-body { padding: 16px 20px; flex: 1; display: flex; flex-direction: column; gap: 14px; }
+    .sb-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--ink-4); }
+    .sb-row { display: flex; align-items: center; gap: 10px; }
+    .sb-icon {
+      width: 32px; height: 32px; border-radius: 50%; background: var(--bg);
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .sb-icon svg { width: 15px; height: 15px; color: var(--ink-3); }
+    .sb-text { display: flex; flex-direction: column; }
+    .sb-primary { font-size: 14px; font-weight: 500; }
+    .sb-secondary { font-size: 11px; color: var(--ink-3); }
+    .sb-divider { height: 1px; background: var(--border); }
+    .sb-notes { padding: 10px 12px; background: var(--bg); border-radius: var(--r-sm); font-size: 12px; color: var(--ink-2); line-height: 1.5; }
+    .sb-status {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    }
+    .sb-status-scheduled { background: #FFF3CC; color: #8A6800; }
+    .sb-status-dot { width: 6px; height: 6px; border-radius: 50%; background: #D4A800; }
+
+    /* Actions */
+    .sb-footer {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      background: var(--bg); display: flex; flex-direction: column; gap: 8px;
+    }
+    .btn-action {
+      width: 100%; padding: 10px; font-family: var(--font-body);
+      font-weight: 700; font-size: 13px; border-radius: var(--r-sm);
+      cursor: pointer; text-align: center; transition: all 150ms;
+      display: flex; align-items: center; justify-content: center; gap: 6px;
+    }
+    .btn-action svg { width: 14px; height: 14px; }
+    .btn-primary { background: var(--gold); color: white; border: 1px solid var(--gold); }
+    .btn-primary:hover { background: var(--gold-hover); }
+    .btn-outline { background: transparent; color: var(--ink-2); border: 1px solid var(--border); }
+    .btn-outline:hover { border-color: var(--ink); }
+    .btn-ghost-danger { background: transparent; color: var(--red); border: 1px solid transparent; font-weight: 500; }
+    .btn-ghost-danger:hover { background: var(--red-lt); }
+  </style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="top-left">
+      <h1 class="page-title">Agenda</h1>
+      <div class="date-nav">
+        <button class="nav-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+        <span class="date-label">Lunes 07 Abril 2026</span>
+        <button class="nav-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18l6-6-6-6"/></svg></button>
+      </div>
+      <button class="today-btn">Hoy</button>
+    </div>
+    <div class="top-right">
+      <div class="view-toggle">
+        <button class="view-btn active">Día</button>
+        <button class="view-btn">Semana</button>
+      </div>
+      <button class="btn-gold">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        Nuevo turno
+      </button>
+    </div>
+  </div>
+
+  <div class="calendar-body">
+
+    <!-- Time gutter -->
+    <div class="time-gutter">
+      <div class="time-label">08:00</div>
+      <div class="time-label">09:00</div>
+      <div class="time-label">10:00</div>
+      <div class="time-label">11:00</div>
+      <div class="time-label">12:00</div>
+      <div class="time-label">13:00</div>
+      <div class="time-label">14:00</div>
+      <div class="time-label">15:00</div>
+      <div class="time-label">16:00</div>
+      <div class="time-label">17:00</div>
+    </div>
+
+    <!-- Day column -->
+    <div class="day-col">
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 08 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 09 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 10 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 11 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 12 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 13 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 14 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 15 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 16 -->
+      <div class="hour-row"><div class="hour-half"></div></div><!-- 17 -->
+
+      <!-- Now: 09:20 = 80px(08h) + 80*(20/60) ≈ 107px -->
+      <div class="now-line" style="top: 107px;">
+        <div class="now-dot"></div><div class="now-rule"></div>
+      </div>
+
+      <!-- 08:00–08:30 Rocky — Completado -->
+      <div class="appt appt-completed" style="top: 0; height: 40px;">
+        <div class="appt-row">
+          <span class="appt-time">08:00 – 08:30</span>
+          <span class="appt-badge b-completed">Completado</span>
+        </div>
+        <div class="appt-patient">Rocky — Pastor Alemán</div>
+        <div class="appt-vet"><div class="vet-dot" style="background:#7C3AED;"></div>Dr. López · Control post-op</div>
+      </div>
+
+      <!-- 09:00–09:30 Mia — Scheduled (selected) -->
+      <div class="appt appt-scheduled selected" style="top: 80px; height: 40px;">
+        <div class="appt-row">
+          <span class="appt-time">09:00 – 09:30</span>
+          <span class="appt-badge b-scheduled">Agendado</span>
+        </div>
+        <div class="appt-patient">Mia — Siamés</div>
+        <div class="appt-vet"><div class="vet-dot" style="background:#15803D;"></div>Dra. Martínez · Vacunación</div>
+      </div>
+
+      <!-- 09:30–10:00 Luna — Scheduled -->
+      <div class="appt appt-scheduled" style="top: 120px; height: 40px;">
+        <div class="appt-row">
+          <span class="appt-time">09:30 – 10:00</span>
+          <span class="appt-badge b-scheduled">Agendado</span>
+        </div>
+        <div class="appt-patient">Luna — Labrador</div>
+        <div class="appt-vet"><div class="vet-dot" style="background:#7C3AED;"></div>Dr. López · Antirrábica</div>
+      </div>
+
+      <!-- 10:00–10:30 empty -->
+      <div class="empty-slot" style="top: 160px; height: 40px;">+ Agendar turno</div>
+
+      <!-- 10:30–11:00 Max — Scheduled -->
+      <div class="appt appt-scheduled" style="top: 200px; height: 40px;">
+        <div class="appt-row">
+          <span class="appt-time">10:30 – 11:00</span>
+          <span class="appt-badge b-scheduled">Agendado</span>
+        </div>
+        <div class="appt-patient">Max — Golden Retriever</div>
+        <div class="appt-vet"><div class="vet-dot" style="background:#15803D;"></div>Dra. Martínez · Dermatitis</div>
+      </div>
+
+      <!-- 11:00–11:30 Coco — Scheduled -->
+      <div class="appt appt-scheduled" style="top: 240px; height: 40px;">
+        <div class="appt-row">
+          <span class="appt-time">11:00 – 11:30</span>
+          <span class="appt-badge b-scheduled">Agendado</span>
+        </div>
+        <div class="appt-patient">Coco — Persa</div>
+        <div class="appt-vet"><div class="vet-dot" style="background:#7C3AED;"></div>Dr. López · Limpieza dental</div>
+      </div>
+
+      <!-- 12-13 empty lunch -->
+      <div class="empty-slot" style="top: 320px; height: 80px; opacity: 0.5; border-color: var(--border);">Almuerzo</div>
+
+      <!-- 14:00–14:30 Toby — Scheduled -->
+      <div class="appt appt-scheduled" style="top: 480px; height: 40px;">
+        <div class="appt-row">
+          <span class="appt-time">14:00 – 14:30</span>
+          <span class="appt-badge b-scheduled">Agendado</span>
+        </div>
+        <div class="appt-patient">Toby — Beagle</div>
+        <div class="appt-vet"><div class="vet-dot" style="background:#15803D;"></div>Dra. Martínez · Castración</div>
+      </div>
+
+      <!-- 15:00 empty -->
+      <div class="empty-slot" style="top: 560px; height: 40px;">+ Agendar turno</div>
+    </div>
+
+    <!-- Sidebar: Mia selected -->
+    <div class="sidebar">
+      <div class="sb-header">
+        <span class="sb-title">Detalle del turno</span>
+        <button class="sb-close"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg></button>
+      </div>
+
+      <div class="sb-body">
+        <div><span class="sb-status sb-status-scheduled"><span class="sb-status-dot"></span>Agendado</span></div>
+
+        <!-- Paciente -->
+        <div>
+          <div class="sb-label">Paciente</div>
+          <div class="sb-row" style="margin-top:6px;">
+            <div class="sb-icon" style="background:#DBEAFE;">
+              <svg viewBox="0 0 24 24" fill="none" stroke="#1D4ED8" stroke-width="2" stroke-linecap="round"><path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .137 1.217 1.5 2.5 3 2.5s2.529-.272 3.5-1.5M14 5.172C14 3.782 15.577 2.679 17.5 3c2.823.47 4.113 6.006 4 7-.137 1.217-1.5 2.5-3 2.5s-2.529-.272-3.5-1.5"/></svg>
+            </div>
+            <div class="sb-text">
+              <span class="sb-primary">Mia</span>
+              <span class="sb-secondary">Felino · Siamés · 2 años</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Dueño -->
+        <div>
+          <div class="sb-label">Dueño</div>
+          <div class="sb-row" style="margin-top:6px;">
+            <div class="sb-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 3a4 4 0 1 0 0 8 4 4 0 0 0 0-8z"/></svg>
+            </div>
+            <div class="sb-text">
+              <span class="sb-primary">Ana Rodríguez</span>
+              <span class="sb-secondary">11 5555-1234 · ana@email.com</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Horario -->
+        <div>
+          <div class="sb-label">Horario</div>
+          <div class="sb-row" style="margin-top:6px;">
+            <div class="sb-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+            </div>
+            <div class="sb-text">
+              <span class="sb-primary">09:00 – 09:30</span>
+              <span class="sb-secondary">Lun 07 Abril 2026</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Vet -->
+        <div>
+          <div class="sb-label">Veterinario</div>
+          <div class="sb-row" style="margin-top:6px;">
+            <div style="width:32px;height:32px;border-radius:50%;background:#DCFCE7;color:#15803D;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;">SM</div>
+            <div class="sb-text">
+              <span class="sb-primary">Dra. Sofía Martínez</span>
+              <span class="sb-secondary">Clínica general · MP 54321</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="sb-divider"></div>
+
+        <!-- Motivo -->
+        <div>
+          <div class="sb-label">Motivo</div>
+          <div style="margin-top:4px;font-size:13px;color:var(--ink-2);">Vacunación · Triple felina</div>
+        </div>
+
+        <!-- Notas -->
+        <div>
+          <div class="sb-label">Notas</div>
+          <div class="sb-notes">Traer libreta sanitaria.</div>
+        </div>
+      </div>
+
+      <!-- Actions: 1 click to attend -->
+      <div class="sb-footer">
+        <button class="btn-action btn-primary">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg>
+          Atender — Abrir consulta
+        </button>
+        <button class="btn-action btn-outline">Editar turno</button>
+        <button class="btn-action btn-ghost-danger">Cancelar turno</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</body>
+</html>

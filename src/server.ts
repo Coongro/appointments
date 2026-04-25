@@ -11,7 +11,4 @@ export type { AppointmentRow, NewAppointmentRow } from './schema/appointment.js'
 
 // Repository
 export { AppointmentRepository } from './repositories/appointment.repository.js';
-export type {
-  SearchParams,
-  EnrichedAppointmentRow,
-} from './repositories/appointment.repository.js';
+export type { SearchParams } from './repositories/appointment.repository.js';
