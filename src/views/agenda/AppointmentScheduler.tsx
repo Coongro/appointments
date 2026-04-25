@@ -11,7 +11,7 @@ import { useContact } from '@coongro/contacts';
 import { formatLocalTime, localToUTC, toDateKey } from '@coongro/datetime';
 import { PetPicker, SPECIES_ICON, formatSpecies } from '@coongro/patients';
 import type { Pet } from '@coongro/patients';
-import { getHostReact, getHostUI, usePlugin, actions } from '@coongro/plugin-sdk';
+import { getHostReact, getHostUI, usePlugin, actions, settings } from '@coongro/plugin-sdk';
 import type { Product, Category } from '@coongro/products';
 import { StaffPicker } from '@coongro/staff';
 import type { StaffMember } from '@coongro/staff';
@@ -71,6 +71,7 @@ export function AppointmentScheduler({
   const [serviceCategories, setServiceCategories] = useState<Category[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
   const catalogLoadedRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // Auto-rellenar motivo desde servicios seleccionados
   const reasonAutoRef = useRef(true);
@@ -200,6 +201,25 @@ export function AppointmentScheduler({
         setStartTime(`${String(defaultHour).padStart(2, '0')}:00`);
         setEndTime(`${String(defaultHour).padStart(2, '0')}:30`);
       }
+      // Preseleccionar veterinario predeterminado desde el setting
+      let cancelled = false;
+      void (async () => {
+        try {
+          const raw = await settings.getAll('consultations.');
+          const defaultStaffId = (raw['consultations.defaultStaffId'] as string) || '';
+          if (cancelled || !defaultStaffId) return;
+          const member = await actions.execute<StaffMember>('staff.members.getById', {
+            id: defaultStaffId,
+          });
+          if (cancelled || !member) return;
+          setSelectedStaff(member);
+        } catch {
+          // Setting no disponible o staff inexistente
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
   }, [open, defaultDate, defaultHour, editAppointment]);
 
@@ -213,7 +233,9 @@ export function AppointmentScheduler({
   }, []);
 
   const handleSubmit = useCallback(async () => {
-    if (!selectedPet) return;
+    // Validación nativa: dispara tooltip apuntando al primer campo requerido vacío
+    if (!formRef.current?.reportValidity()) return;
+    if (!selectedPet || !selectedStaff) return;
 
     const eventTitle = [selectedPet.name, reason].filter(Boolean).join(' — ') || 'Turno';
     const validServices = serviceLines.filter((s) => s.product_name.trim());
@@ -238,7 +260,7 @@ export function AppointmentScheduler({
       const result = await update(editAppointment.id, {
         contact_id: ownerContactId ?? selectedPet.owner_id,
         pet_id: selectedPet.id,
-        staff_id: selectedStaff?.id ?? null,
+        staff_id: selectedStaff.id,
         reason: reason || null,
         notes: notes || null,
         metadata: validServices.length > 0 ? { services: validServices } : null,
@@ -270,7 +292,7 @@ export function AppointmentScheduler({
       const result = await create({
         contact_id: ownerContactId ?? selectedPet.owner_id,
         pet_id: selectedPet.id,
-        staff_id: selectedStaff?.id ?? null,
+        staff_id: selectedStaff.id,
         reason: reason || null,
         notes: notes || null,
         calendar_event_id: calendarEventId,
@@ -479,35 +501,64 @@ export function AppointmentScheduler({
 
   const dateTimeGrid = isMobile ? '1fr' : '1fr 1fr 1fr';
 
+  // Input espejo invisible para validación nativa "required" sobre pickers
+  const requiredMirror = (value: string, label: string) =>
+    React.createElement('input', {
+      type: 'text',
+      tabIndex: -1,
+      required: true,
+      'aria-label': label,
+      value,
+      onChange: () => {},
+      style: {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        height: '1px',
+        opacity: 0,
+        pointerEvents: 'none',
+      },
+    });
+
   // ── Body ──
   const body = React.createElement(
-    'div',
-    { style: { display: 'flex', flexDirection: 'column', gap: '18px' } },
+    'form',
+    {
+      ref: formRef,
+      onSubmit: (e: React.FormEvent) => e.preventDefault(),
+      style: { display: 'flex', flexDirection: 'column', gap: '18px' },
+    },
 
     // ── 1. Paciente ──
     sectionLabel('PawPrint', 'Paciente'),
-    selectedPet
-      ? floatingField(
-          'Mascota',
-          pickerCard(
-            petAvatar(selectedPet.species),
-            selectedPet.name,
-            petSubtitle(selectedPet),
-            () => handlePetChange(null)
+    React.createElement(
+      'div',
+      { style: { position: 'relative' } },
+      selectedPet
+        ? floatingField(
+            'Mascota *',
+            pickerCard(
+              petAvatar(selectedPet.species),
+              selectedPet.name,
+              petSubtitle(selectedPet),
+              () => handlePetChange(null)
+            )
           )
-        )
-      : floatingField(
-          'Mascota',
-          React.createElement(
-            'div',
-            { style: { paddingTop: '22px' } },
-            React.createElement(PetPicker, {
-              value: selectedPet?.id ?? editAppointment?.pet_id ?? null,
-              onChange: handlePetChange,
-              placeholder: 'Buscar mascota...',
-            })
-          )
-        ),
+        : floatingField(
+            'Mascota *',
+            React.createElement(
+              'div',
+              { style: { paddingTop: '22px' } },
+              React.createElement(PetPicker, {
+                value: selectedPet?.id ?? editAppointment?.pet_id ?? null,
+                onChange: handlePetChange,
+                placeholder: 'Buscar mascota...',
+              })
+            )
+          ),
+      requiredMirror(selectedPet?.id ?? '', 'Mascota')
+    ),
 
     // Auto-fill del dueno
     ownerContact &&
@@ -539,28 +590,33 @@ export function AppointmentScheduler({
 
     // ── 2. Veterinario ──
     sectionLabel('Stethoscope', 'Veterinario'),
-    selectedStaff
-      ? floatingField(
-          'Profesional',
-          pickerCard(
-            staffAvatar(selectedStaff.contact_name),
-            selectedStaff.contact_name,
-            staffSubtitle(selectedStaff),
-            () => handleStaffChange(null)
+    React.createElement(
+      'div',
+      { style: { position: 'relative' } },
+      selectedStaff
+        ? floatingField(
+            'Profesional *',
+            pickerCard(
+              staffAvatar(selectedStaff.contact_name),
+              selectedStaff.contact_name,
+              staffSubtitle(selectedStaff),
+              () => handleStaffChange(null)
+            )
           )
-        )
-      : floatingField(
-          'Profesional',
-          React.createElement(
-            'div',
-            { style: { paddingTop: '22px' } },
-            React.createElement(StaffPicker, {
-              value: selectedStaff?.id ?? editAppointment?.staff_id ?? null,
-              onChange: handleStaffChange,
-              placeholder: 'Buscar profesional...',
-            })
-          )
-        ),
+        : floatingField(
+            'Profesional *',
+            React.createElement(
+              'div',
+              { style: { paddingTop: '22px' } },
+              React.createElement(StaffPicker, {
+                value: selectedStaff?.id ?? editAppointment?.staff_id ?? null,
+                onChange: handleStaffChange,
+                placeholder: 'Buscar profesional...',
+              })
+            )
+          ),
+      requiredMirror(selectedStaff?.id ?? '', 'Profesional')
+    ),
 
     // ── 3. Fecha y hora ──
     sectionLabel('Clock', 'Fecha y hora'),
@@ -701,7 +757,7 @@ export function AppointmentScheduler({
       {
         variant: 'brand',
         onClick: () => void handleSubmit(),
-        disabled: creating || updating || !selectedPet,
+        disabled: creating || updating,
       },
       creating || updating
         ? isEditing
