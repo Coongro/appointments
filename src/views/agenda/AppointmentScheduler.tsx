@@ -11,7 +11,7 @@ import { useContact } from '@coongro/contacts';
 import { formatLocalTime, localToUTC, toDateKey } from '@coongro/datetime';
 import { PetPicker, SPECIES_ICON, formatSpecies } from '@coongro/patients';
 import type { Pet } from '@coongro/patients';
-import { getHostReact, getHostUI, usePlugin, actions } from '@coongro/plugin-sdk';
+import { getHostReact, getHostUI, usePlugin, actions, settings } from '@coongro/plugin-sdk';
 import type { Product, Category } from '@coongro/products';
 import { StaffPicker } from '@coongro/staff';
 import type { StaffMember } from '@coongro/staff';
@@ -200,6 +200,25 @@ export function AppointmentScheduler({
         setStartTime(`${String(defaultHour).padStart(2, '0')}:00`);
         setEndTime(`${String(defaultHour).padStart(2, '0')}:30`);
       }
+      // Preseleccionar veterinario predeterminado desde el setting
+      let cancelled = false;
+      void (async () => {
+        try {
+          const raw = await settings.getAll('consultations.');
+          const defaultStaffId = (raw['consultations.defaultStaffId'] as string) || '';
+          if (cancelled || !defaultStaffId) return;
+          const member = await actions.execute<StaffMember>('staff.members.getById', {
+            id: defaultStaffId,
+          });
+          if (cancelled || !member) return;
+          setSelectedStaff(member);
+        } catch {
+          // Setting no disponible o staff inexistente
+        }
+      })();
+      return () => {
+        cancelled = true;
+      };
     }
   }, [open, defaultDate, defaultHour, editAppointment]);
 
@@ -212,120 +231,106 @@ export function AppointmentScheduler({
     setSelectedStaff(member);
   }, []);
 
-  const handleSubmit = useCallback(async () => {
-    if (!selectedPet) return;
+  const handleSubmit = useCallback(
+    async (e: React.FormEvent) => {
+      e.preventDefault();
+      // FormDialogSubmit dispara requestSubmit() que ya activa la validación nativa del browser.
+      if (!selectedPet || !selectedStaff) return;
 
-    const eventTitle = [selectedPet.name, reason].filter(Boolean).join(' — ') || 'Turno';
-    const validServices = serviceLines.filter((s) => s.product_name.trim());
-    const startAt = localToUTC(date, startTime, tz);
-    const endAt = localToUTC(date, endTime, tz);
+      const eventTitle = [selectedPet.name, reason].filter(Boolean).join(' — ') || 'Turno';
+      const validServices = serviceLines.filter((s) => s.product_name.trim());
+      const startAt = localToUTC(date, startTime, tz);
+      const endAt = localToUTC(date, endTime, tz);
 
-    if (isEditing && editAppointment) {
-      // Modo edición: actualizar evento de calendario + appointment
-      if (editAppointment.calendar_event_id) {
+      if (isEditing && editAppointment) {
+        // Modo edición: actualizar evento de calendario + appointment
+        if (editAppointment.calendar_event_id) {
+          try {
+            await actions.execute('calendar.events.update', {
+              id: editAppointment.calendar_event_id,
+              data: { title: eventTitle, start_at: startAt, end_at: endAt },
+            });
+          } catch (err) {
+            const msg = err instanceof Error ? err.message : 'No se pudo actualizar el evento';
+            toast.error('Error', msg);
+            return;
+          }
+        }
+
+        const result = await update(editAppointment.id, {
+          contact_id: ownerContactId ?? selectedPet.owner_id,
+          pet_id: selectedPet.id,
+          staff_id: selectedStaff.id,
+          reason: reason || null,
+          notes: notes || null,
+          metadata: validServices.length > 0 ? { services: validServices } : null,
+        });
+
+        if (result) {
+          onSuccess?.();
+          onClose();
+        }
+      } else {
+        // Modo creación: crear evento de calendario + appointment
+        let calendarEventId: string | null = null;
         try {
-          await actions.execute('calendar.events.update', {
-            id: editAppointment.calendar_event_id,
-            data: { title: eventTitle, start_at: startAt, end_at: endAt },
+          const eventResult = await actions.execute<{ id: string }[]>('calendar.events.create', {
+            data: {
+              title: eventTitle,
+              start_at: startAt,
+              end_at: endAt,
+              status: 'confirmed',
+            },
           });
+          calendarEventId = eventResult?.[0]?.id ?? null;
         } catch (err) {
-          const msg = err instanceof Error ? err.message : 'No se pudo actualizar el evento';
+          const msg = err instanceof Error ? err.message : 'No se pudo crear el evento';
           toast.error('Error', msg);
           return;
         }
-      }
 
-      const result = await update(editAppointment.id, {
-        contact_id: ownerContactId ?? selectedPet.owner_id,
-        pet_id: selectedPet.id,
-        staff_id: selectedStaff?.id ?? null,
-        reason: reason || null,
-        notes: notes || null,
-        metadata: validServices.length > 0 ? { services: validServices } : null,
-      });
-
-      if (result) {
-        onSuccess?.();
-        onClose();
-      }
-    } else {
-      // Modo creación: crear evento de calendario + appointment
-      let calendarEventId: string | null = null;
-      try {
-        const eventResult = await actions.execute<{ id: string }[]>('calendar.events.create', {
-          data: {
-            title: eventTitle,
-            start_at: startAt,
-            end_at: endAt,
-            status: 'confirmed',
-          },
+        const result = await create({
+          contact_id: ownerContactId ?? selectedPet.owner_id,
+          pet_id: selectedPet.id,
+          staff_id: selectedStaff.id,
+          reason: reason || null,
+          notes: notes || null,
+          calendar_event_id: calendarEventId,
+          metadata: validServices.length > 0 ? { services: validServices } : null,
         });
-        calendarEventId = eventResult?.[0]?.id ?? null;
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : 'No se pudo crear el evento';
-        toast.error('Error', msg);
-        return;
-      }
 
-      const result = await create({
-        contact_id: ownerContactId ?? selectedPet.owner_id,
-        pet_id: selectedPet.id,
-        staff_id: selectedStaff?.id ?? null,
-        reason: reason || null,
-        notes: notes || null,
-        calendar_event_id: calendarEventId,
-        metadata: validServices.length > 0 ? { services: validServices } : null,
-      });
-
-      if (result) {
-        setSelectedPet(null);
-        setSelectedStaff(null);
-        setOwnerContactId(null);
-        setReason('');
-        setNotes('');
-        setServiceLines([]);
-        onSuccess?.();
-        onClose();
+        if (result) {
+          setSelectedPet(null);
+          setSelectedStaff(null);
+          setOwnerContactId(null);
+          setReason('');
+          setNotes('');
+          setServiceLines([]);
+          onSuccess?.();
+          onClose();
+        }
       }
-    }
-  }, [
-    selectedPet,
-    ownerContactId,
-    selectedStaff,
-    reason,
-    serviceLines,
-    notes,
-    date,
-    startTime,
-    endTime,
-    create,
-    update,
-    isEditing,
-    editAppointment,
-    onSuccess,
-    onClose,
-  ]);
+    },
+    [
+      selectedPet,
+      ownerContactId,
+      selectedStaff,
+      reason,
+      serviceLines,
+      notes,
+      date,
+      startTime,
+      endTime,
+      create,
+      update,
+      isEditing,
+      editAppointment,
+      onSuccess,
+      onClose,
+    ]
+  );
 
   // ── Helpers ──
-
-  const sectionLabel = (iconName: string, text: string) =>
-    React.createElement(
-      'div',
-      {
-        style: {
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          fontSize: '10px',
-          fontWeight: '700',
-          textTransform: 'uppercase',
-          letterSpacing: '0.6px',
-          color: 'var(--cg-text-muted)',
-        },
-      },
-      React.createElement(UI.DynamicIcon, { icon: iconName, size: 12 }),
-      text
-    );
 
   const floatingField = (label: string, content: ReturnType<typeof React.createElement>) =>
     React.createElement(
@@ -479,248 +484,243 @@ export function AppointmentScheduler({
 
   const dateTimeGrid = isMobile ? '1fr' : '1fr 1fr 1fr';
 
-  // ── Body ──
-  const body = React.createElement(
-    'div',
-    { style: { display: 'flex', flexDirection: 'column', gap: '18px' } },
-
-    // ── 1. Paciente ──
-    sectionLabel('PawPrint', 'Paciente'),
-    selectedPet
-      ? floatingField(
-          'Mascota',
-          pickerCard(
-            petAvatar(selectedPet.species),
-            selectedPet.name,
-            petSubtitle(selectedPet),
-            () => handlePetChange(null)
-          )
-        )
-      : floatingField(
-          'Mascota',
-          React.createElement(
-            'div',
-            { style: { paddingTop: '22px' } },
-            React.createElement(PetPicker, {
-              value: selectedPet?.id ?? editAppointment?.pet_id ?? null,
-              onChange: handlePetChange,
-              placeholder: 'Buscar mascota...',
-            })
-          )
-        ),
-
-    // Auto-fill del dueno
-    ownerContact &&
-      React.createElement(
-        'div',
-        {
-          style: {
-            display: 'flex',
-            alignItems: 'center',
-            gap: '6px',
-            padding: '8px 12px',
-            background: 'var(--cg-bg)',
-            borderRadius: '7px',
-            fontSize: '12px',
-            color: 'var(--cg-text-tertiary)',
-          },
-        },
-        React.createElement(UI.DynamicIcon, { icon: 'User', size: 13 }),
-        'Dueno: ',
-        React.createElement(
-          'strong',
-          {
-            style: { color: 'var(--cg-text-secondary)', fontWeight: '500' },
-          },
-          ownerContact.name
-        ),
-        ownerContact.phone && ` · ${ownerContact.phone}`
-      ),
-
-    // ── 2. Veterinario ──
-    sectionLabel('Stethoscope', 'Veterinario'),
-    selectedStaff
-      ? floatingField(
-          'Profesional',
-          pickerCard(
-            staffAvatar(selectedStaff.contact_name),
-            selectedStaff.contact_name,
-            staffSubtitle(selectedStaff),
-            () => handleStaffChange(null)
-          )
-        )
-      : floatingField(
-          'Profesional',
-          React.createElement(
-            'div',
-            { style: { paddingTop: '22px' } },
-            React.createElement(StaffPicker, {
-              value: selectedStaff?.id ?? editAppointment?.staff_id ?? null,
-              onChange: handleStaffChange,
-              placeholder: 'Buscar profesional...',
-            })
-          )
-        ),
-
-    // ── 3. Fecha y hora ──
-    sectionLabel('Clock', 'Fecha y hora'),
-    React.createElement(
-      'div',
-      { style: { display: 'grid', gridTemplateColumns: dateTimeGrid, gap: '12px' } },
-      floatingField(
-        'Fecha',
-        React.createElement(
-          'div',
-          { style: { paddingTop: '22px' } },
-          React.createElement(DatePicker, { value: date, onChange: (d: string) => setDate(d) })
-        )
-      ),
-      floatingField(
-        'Inicio',
-        React.createElement(
-          'div',
-          { style: { paddingTop: '22px' } },
-          React.createElement(TimePicker, {
-            value: startTime,
-            onChange: (t: string) => {
-              setStartTime(t);
-              const [h, m] = t.split(':').map(Number);
-              const endMin = h * 60 + m + 30;
-              setEndTime(
-                `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`
-              );
-            },
-          })
-        )
-      ),
-      floatingField(
-        'Fin',
-        React.createElement(
-          'div',
-          { style: { paddingTop: '22px' } },
-          React.createElement(TimePicker, {
-            value: endTime,
-            onChange: (t: string) => setEndTime(t),
-          })
-        )
-      )
-    ),
-
-    // ── 4. Motivo ──
-    sectionLabel('FileText', 'Motivo'),
-    React.createElement(
-      'div',
-      null,
-      React.createElement(
-        'label',
-        {
-          style: {
-            fontSize: '12px',
-            fontWeight: '500',
-            color: 'var(--cg-text-secondary)',
-            display: 'block',
-            marginBottom: '4px',
-          },
-        },
-        'Motivo de la consulta'
-      ),
-      React.createElement(UI.Input, {
-        value: reason,
-        onChange: handleReasonChange,
-        placeholder: 'Ej: Control anual, vacunacion, urgencia...',
-      })
-    ),
-
-    // ── 4b. Servicios ──
-    sectionLabel('Receipt', 'Servicios'),
-    React.createElement(
-      'div',
-      {
-        style: {
-          border: '1px solid var(--cg-border)',
-          borderRadius: '7px',
-          padding: '12px',
-          background: 'var(--cg-surface)',
-        },
-      },
-      React.createElement(ServiceLineForm, {
-        services: serviceLines,
-        onChange: setServiceLines,
-        catalog: serviceCatalog,
-        categories: serviceSubcategories,
-        catalogLoading,
-        onProductCreated: handleProductCreated,
-        showPrices: true,
-      })
-    ),
-
-    // ── 5. Notas ──
-    sectionLabel('StickyNote', 'Notas'),
-    React.createElement(
-      'div',
-      null,
-      React.createElement(
-        'label',
-        {
-          style: {
-            fontSize: '12px',
-            fontWeight: '500',
-            color: 'var(--cg-text-secondary)',
-            display: 'block',
-            marginBottom: '4px',
-          },
-        },
-        'Notas (opcional)'
-      ),
-      React.createElement(UI.Textarea, {
-        value: notes,
-        onChange: (e: { target: { value: string } }) => setNotes(e.target.value),
-        placeholder: 'Observaciones para el dia del turno...',
-        rows: 3,
-      })
-    )
-  );
-
-  const footer = React.createElement(
-    'div',
-    {
+  // Input espejo invisible para validación nativa "required" sobre pickers
+  const requiredMirror = (value: string, label: string) =>
+    React.createElement('input', {
+      type: 'text',
+      tabIndex: -1,
+      required: true,
+      'aria-label': label,
+      value,
+      onChange: () => {},
       style: {
-        display: 'flex',
-        flexDirection: isMobile ? 'column-reverse' : 'row',
-        justifyContent: 'flex-end',
-        gap: '8px',
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        width: '100%',
+        height: '1px',
+        opacity: 0,
+        pointerEvents: 'none',
       },
-    },
-    React.createElement(
-      UI.Button,
-      { variant: 'ghost', onClick: onClose, disabled: creating || updating },
-      'Cancelar'
-    ),
-    React.createElement(
-      UI.Button,
-      {
-        variant: 'brand',
-        onClick: () => void handleSubmit(),
-        disabled: creating || updating || !selectedPet,
-      },
-      creating || updating
-        ? isEditing
-          ? 'Guardando...'
-          : 'Agendando...'
-        : isEditing
-          ? 'Guardar cambios'
-          : 'Agendar turno'
-    )
-  );
+    });
 
-  return React.createElement(UI.FormDialog, {
+  return React.createElement(UI.FormDialogSubmit, {
     open,
     onOpenChange: (isOpen: boolean) => {
       if (!isOpen) onClose();
     },
     title: isEditing ? 'Editar turno' : 'Agendar turno',
-    children: body,
-    footer,
     size: 'md',
+    submitLabel: isEditing ? 'Guardar cambios' : 'Agendar turno',
+    submittingLabel: isEditing ? 'Guardando...' : 'Agendando...',
+    onCancel: onClose,
+    disabled: creating || updating,
+    children: ({ formRef }: { formRef: React.RefObject<HTMLFormElement> }) =>
+      React.createElement(
+        'form',
+        {
+          ref: formRef,
+          onSubmit: handleSubmit,
+          style: { display: 'flex', flexDirection: 'column', gap: '16px' },
+        },
+
+        // ── 1. Paciente ──
+        React.createElement(
+          UI.FormSection,
+          { icon: 'PawPrint', title: 'Paciente' },
+          React.createElement(
+            'div',
+            { style: { position: 'relative' } },
+            selectedPet
+              ? floatingField(
+                  'Mascota *',
+                  pickerCard(
+                    petAvatar(selectedPet.species),
+                    selectedPet.name,
+                    petSubtitle(selectedPet),
+                    () => handlePetChange(null)
+                  )
+                )
+              : floatingField(
+                  'Mascota *',
+                  React.createElement(
+                    'div',
+                    { style: { paddingTop: '22px' } },
+                    React.createElement(PetPicker, {
+                      value: selectedPet?.id ?? editAppointment?.pet_id ?? null,
+                      onChange: handlePetChange,
+                      placeholder: 'Buscar mascota...',
+                    })
+                  )
+                ),
+            requiredMirror(selectedPet?.id ?? '', 'Mascota')
+          ),
+          // Auto-fill del dueno (queda dentro del card de Paciente)
+          ownerContact &&
+            React.createElement(
+              'div',
+              {
+                style: {
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '8px 12px',
+                  background: 'var(--cg-bg)',
+                  borderRadius: '7px',
+                  fontSize: '12px',
+                  color: 'var(--cg-text-tertiary)',
+                },
+              },
+              React.createElement(UI.DynamicIcon, { icon: 'User', size: 13 }),
+              'Dueno: ',
+              React.createElement(
+                'strong',
+                {
+                  style: { color: 'var(--cg-text-secondary)', fontWeight: '500' },
+                },
+                ownerContact.name
+              ),
+              ownerContact.phone && ` · ${ownerContact.phone}`
+            )
+        ),
+
+        // ── 2. Veterinario ──
+        React.createElement(
+          UI.FormSection,
+          { icon: 'Stethoscope', title: 'Veterinario' },
+          React.createElement(
+            'div',
+            { style: { position: 'relative' } },
+            selectedStaff
+              ? floatingField(
+                  'Profesional *',
+                  pickerCard(
+                    staffAvatar(selectedStaff.contact_name),
+                    selectedStaff.contact_name,
+                    staffSubtitle(selectedStaff),
+                    () => handleStaffChange(null)
+                  )
+                )
+              : floatingField(
+                  'Profesional *',
+                  React.createElement(
+                    'div',
+                    { style: { paddingTop: '22px' } },
+                    React.createElement(StaffPicker, {
+                      value: selectedStaff?.id ?? editAppointment?.staff_id ?? null,
+                      onChange: handleStaffChange,
+                      placeholder: 'Buscar profesional...',
+                    })
+                  )
+                ),
+            requiredMirror(selectedStaff?.id ?? '', 'Profesional')
+          )
+        ),
+
+        // ── 3. Fecha y hora ──
+        React.createElement(
+          UI.FormSection,
+          { icon: 'Clock', title: 'Fecha y hora' },
+          React.createElement(
+            'div',
+            { style: { display: 'grid', gridTemplateColumns: dateTimeGrid, gap: '12px' } },
+            floatingField(
+              'Fecha',
+              React.createElement(
+                'div',
+                { style: { paddingTop: '22px' } },
+                React.createElement(DatePicker, {
+                  value: date,
+                  onChange: (d: string) => setDate(d),
+                })
+              )
+            ),
+            floatingField(
+              'Inicio',
+              React.createElement(
+                'div',
+                { style: { paddingTop: '22px' } },
+                React.createElement(TimePicker, {
+                  value: startTime,
+                  onChange: (t: string) => {
+                    setStartTime(t);
+                    const [h, m] = t.split(':').map(Number);
+                    const endMin = h * 60 + m + 30;
+                    setEndTime(
+                      `${String(Math.floor(endMin / 60)).padStart(2, '0')}:${String(endMin % 60).padStart(2, '0')}`
+                    );
+                  },
+                })
+              )
+            ),
+            floatingField(
+              'Fin',
+              React.createElement(
+                'div',
+                { style: { paddingTop: '22px' } },
+                React.createElement(TimePicker, {
+                  value: endTime,
+                  onChange: (t: string) => setEndTime(t),
+                })
+              )
+            )
+          )
+        ),
+
+        // ── 4. Motivo ──
+        React.createElement(
+          UI.FormSection,
+          { icon: 'FileText', title: 'Motivo' },
+          React.createElement(
+            'div',
+            null,
+            React.createElement(
+              'label',
+              {
+                style: {
+                  fontSize: '12px',
+                  fontWeight: '500',
+                  color: 'var(--cg-text-secondary)',
+                  display: 'block',
+                  marginBottom: '4px',
+                },
+              },
+              'Motivo de la consulta'
+            ),
+            React.createElement(UI.Input, {
+              value: reason,
+              onChange: handleReasonChange,
+              placeholder: 'Ej: Control anual, vacunacion, urgencia...',
+            })
+          )
+        ),
+
+        // ── 5. Servicios ──
+        React.createElement(
+          UI.FormSection,
+          { icon: 'Receipt', title: 'Servicios' },
+          React.createElement(ServiceLineForm, {
+            services: serviceLines,
+            onChange: setServiceLines,
+            catalog: serviceCatalog,
+            categories: serviceSubcategories,
+            catalogLoading,
+            onProductCreated: handleProductCreated,
+            showPrices: true,
+          })
+        ),
+
+        // ── 6. Notas ──
+        React.createElement(
+          UI.FormSection,
+          { icon: 'StickyNote', title: 'Notas' },
+          React.createElement(UI.Textarea, {
+            value: notes,
+            onChange: (e: { target: { value: string } }) => setNotes(e.target.value),
+            placeholder: 'Observaciones para el dia del turno...',
+            rows: 3,
+          })
+        )
+      ),
   });
 }
