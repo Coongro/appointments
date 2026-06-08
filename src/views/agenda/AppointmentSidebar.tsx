@@ -70,6 +70,7 @@ export function AppointmentSidebar({
         <UI.SheetHeader>
           <UI.SheetTitle>Detalle del turno</UI.SheetTitle>
           <button
+            aria-label="Cerrar"
             onClick={onClose}
             style={{
               width: '24px',

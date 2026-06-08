@@ -21,9 +21,16 @@ import { AppointmentSidebar } from './AppointmentSidebar.js';
 const React = getHostReact();
 const { useState, useCallback, useMemo } = React;
 
-export function AgendaView() {
+export function AgendaView(props: Record<string, unknown> = {}) {
   const UI = getHostUI();
   const tz = useTenantTimezone();
+
+  // Fecha inicial opcional (deep-link, ej. desde "Ver turno" de vacunación).
+  // Llega como date-key 'yyyy-mm-dd'; se interpreta a medianoche local.
+  const initialDate = useMemo(() => {
+    const raw = props.initialDate;
+    return typeof raw === 'string' && raw ? new Date(`${raw}T00:00:00`) : undefined;
+  }, [props.initialDate]);
 
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
   const [schedulerOpen, setSchedulerOpen] = useState(false);
@@ -224,6 +231,7 @@ export function AgendaView() {
       React.createElement(CalendarView, {
         enabledViews: ['day', 'week', 'agenda'],
         defaultView: 'day',
+        initialDate,
         title: 'Agenda',
         daySlotHeight: 40,
         events,

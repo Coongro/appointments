@@ -5,7 +5,7 @@
  */
 import { DayColumn, toDateString, formatEventTime, useTenantTimezone } from '@coongro/calendar';
 import type { CalendarEvent } from '@coongro/calendar';
-import { getHostReact } from '@coongro/plugin-sdk';
+import { getHostReact, settings } from '@coongro/plugin-sdk';
 
 import type { Appointment } from '../../types/appointment.js';
 import { toCalendarEvents, buildAppointmentMap } from '../../utils/helpers.js';
@@ -17,7 +17,7 @@ import {
 } from '../../utils/status.js';
 
 const React = getHostReact();
-const { useMemo, useCallback } = React;
+const { useMemo, useCallback, useState, useEffect } = React;
 
 interface AgendaDayGridProps {
   date: Date;
@@ -35,6 +35,29 @@ export function AgendaDayGrid({
   selectedId,
 }: AgendaDayGridProps) {
   const tz = useTenantTimezone();
+  // Horario de la agenda configurable (settings): cada clínica tiene sus horas. Default 7–21,
+  // franjas de 30 min. Arranca con defaults y se ajusta cuando cargan los settings.
+  const [grid, setGrid] = useState({ startHour: 7, endHour: 21, slotDuration: 30 });
+  useEffect(() => {
+    let active = true;
+    void (async () => {
+      try {
+        const [sh, eh, sm] = await Promise.all([
+          settings.get<number>('appointments.agenda.startHour'),
+          settings.get<number>('appointments.agenda.endHour'),
+          settings.get<number>('appointments.agenda.slotMinutes'),
+        ]);
+        if (active) {
+          setGrid({ startHour: sh ?? 7, endHour: eh ?? 21, slotDuration: sm ?? 30 });
+        }
+      } catch {
+        /* settings no disponibles: quedan los defaults */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, []);
   const events = useMemo(() => toCalendarEvents(appointments), [appointments]);
   const appointmentMap = useMemo(() => buildAppointmentMap(appointments), [appointments]);
 
@@ -161,9 +184,9 @@ export function AgendaDayGrid({
   return React.createElement(DayColumn, {
     date: dateStr,
     events,
-    startHour: 0,
-    endHour: 24,
-    slotDuration: 30,
+    startHour: grid.startHour,
+    endHour: grid.endHour,
+    slotDuration: grid.slotDuration,
     renderEvent,
     onEventClick: handleEventClick,
     onSlotClick,
