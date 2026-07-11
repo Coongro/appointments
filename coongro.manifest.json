@@ -13,6 +13,8 @@
       {
         "path": "Consultas/Agenda",
         "order": 0,
+        "icon": "assets/icons/calendar.svg",
+        "color": "#6366F1",
         "viewId": "appointments.agenda.open"
       }
     ],
