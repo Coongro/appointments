@@ -32,6 +32,58 @@
         "export": "AppointmentRepository",
         "prefix": "appointments"
       }
-    ]
+    ],
+    "settings": {
+      "groups": [{ "id": "appointments", "label": "Agenda y turnos", "order": 50 }],
+      "pages": [
+        {
+          "id": "appointments.general",
+          "group": "appointments",
+          "label": "Horario",
+          "icon": "Clock",
+          "order": 10
+        }
+      ],
+      "sections": [
+        {
+          "id": "appointments.general.grid",
+          "page": "appointments.general",
+          "label": "Horario de la agenda",
+          "order": 10,
+          "items": [
+            {
+              "key": "appointments.agenda.startHour",
+              "type": "number",
+              "label": "Hora de apertura",
+              "description": "Primera hora que muestra la agenda del día (0–23).",
+              "default": 7,
+              "min": 0,
+              "max": 23,
+              "tags": ["appointments", "agenda", "horario", "apertura"]
+            },
+            {
+              "key": "appointments.agenda.endHour",
+              "type": "number",
+              "label": "Hora de cierre",
+              "description": "Última hora que muestra la agenda del día (1–24).",
+              "default": 21,
+              "min": 1,
+              "max": 24,
+              "tags": ["appointments", "agenda", "horario", "cierre"]
+            },
+            {
+              "key": "appointments.agenda.slotMinutes",
+              "type": "number",
+              "label": "Duración de la franja (min)",
+              "description": "Tamaño de cada franja de la agenda, en minutos (ej. 15, 20, 30).",
+              "default": 30,
+              "min": 5,
+              "max": 120,
+              "tags": ["appointments", "agenda", "franja", "duración", "slot"]
+            }
+          ]
+        }
+      ]
+    }
   }
 }

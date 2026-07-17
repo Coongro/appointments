@@ -289,26 +289,43 @@ export function AppointmentScheduler({
           return;
         }
 
-        const result = await create({
-          contact_id: ownerContactId ?? selectedPet.owner_id,
-          pet_id: selectedPet.id,
-          staff_id: selectedStaff.id,
-          reason: reason || null,
-          notes: notes || null,
-          calendar_event_id: calendarEventId,
-          metadata: validServices.length > 0 ? { services: validServices } : null,
-        });
-
-        if (result) {
-          setSelectedPet(null);
-          setSelectedStaff(null);
-          setOwnerContactId(null);
-          setReason('');
-          setNotes('');
-          setServiceLines([]);
-          onSuccess?.();
-          onClose();
+        let result;
+        try {
+          result = await create({
+            contact_id: ownerContactId ?? selectedPet.owner_id,
+            pet_id: selectedPet.id,
+            staff_id: selectedStaff.id,
+            reason: reason || null,
+            notes: notes || null,
+            calendar_event_id: calendarEventId,
+            metadata: validServices.length > 0 ? { services: validServices } : null,
+          });
+        } catch {
+          result = null;
         }
+
+        if (!result) {
+          // Limpieza transaccional: el turno no se creó → borramos el evento de calendario
+          // recién creado para no dejarlo HUÉRFANO en la agenda (era un paso en 2 fases sin
+          // transacción: si fallaba la 2da, quedaba el evento sin turno asociado).
+          if (calendarEventId) {
+            // best-effort: si tampoco se puede borrar el evento, seguimos igual
+            await actions
+              .execute('calendar.events.delete', { id: calendarEventId })
+              .catch(() => undefined);
+          }
+          toast.error('Error', 'No se pudo crear el turno. Intentá de nuevo.');
+          return;
+        }
+
+        setSelectedPet(null);
+        setSelectedStaff(null);
+        setOwnerContactId(null);
+        setReason('');
+        setNotes('');
+        setServiceLines([]);
+        onSuccess?.();
+        onClose();
       }
     },
     [
@@ -366,6 +383,12 @@ export function AppointmentScheduler({
     React.createElement(
       'div',
       {
+        // Combobox "colapsado mostrando el valor elegido": expone la selección de
+        // forma accesible (lectores de pantalla y el copiloto IA leen el valor) y,
+        // al ser combobox, su botón de quitar (×) queda como descendiente y no se
+        // confunde con un control suelto.
+        role: 'combobox',
+        'aria-expanded': false,
         style: {
           width: '100%',
           padding: '26px 13px 10px',
@@ -409,6 +432,7 @@ export function AppointmentScheduler({
         'button',
         {
           type: 'button',
+          'aria-label': 'Quitar selecci\u00F3n',
           style: {
             width: '20px',
             height: '20px',
