@@ -1,6 +1,6 @@
 {
   "name": "@coongro/appointments",
-  "version": "0.4.0",
+  "version": "0.6.0",
   "type": "module",
   "description": "Gestión de turnos veterinarios. Agenda diaria, scheduler y flujo turno→consulta.",
   "main": "dist/index.js",
