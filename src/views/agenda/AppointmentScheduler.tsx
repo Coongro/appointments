@@ -16,9 +16,11 @@ import type { Product, Category } from '@coongro/products';
 import { StaffPicker } from '@coongro/staff';
 import type { StaffMember } from '@coongro/staff';
 
+import { findStaffOverlap } from '../../data/overlap.js';
 import { buildTurnoReminder, REMINDER_ENTITY_TYPE } from '../../data/reminders.js';
 import { useAppointmentMutations } from '../../hooks/useAppointmentMutations.js';
 import { useIsMobile } from '../../hooks/useIsMobile.js';
+import { useAppointmentsSettings } from '../../settings/settings.gen.js';
 import type { Appointment } from '../../types/appointment.js';
 import { getInitials } from '../../utils/helpers.js';
 
@@ -48,6 +50,7 @@ export function AppointmentScheduler({
   const isMobile = useIsMobile();
   const tz = useTenantTimezone();
   const { create, update, creating, updating } = useAppointmentMutations();
+  const { settings: apptSettings } = useAppointmentsSettings();
   const isEditing = !!editAppointment;
 
   // Form state
@@ -73,6 +76,14 @@ export function AppointmentScheduler({
   const [catalogLoading, setCatalogLoading] = useState(true);
   const catalogLoadedRef = useRef(false);
 
+  // Aviso de solapamiento (setting appointments.allowOverlap apagado): cuando el
+  // profesional ya tiene un turno que se cruza, mostramos un banner dentro del
+  // form (no un diálogo del navegador ni un modal anidado sobre el FormDialog —
+  // ese anidamiento está roto, COONG-218) con su propio botón para agendar igual.
+  const [overlapWarning, setOverlapWarning] = useState<string | null>(null);
+  // Al confirmar "agendar de todos modos", el próximo submit saltea el chequeo.
+  const overlapAckRef = useRef(false);
+
   // Auto-rellenar motivo desde servicios seleccionados
   const reasonAutoRef = useRef(true);
   useEffect(() => {
@@ -87,6 +98,13 @@ export function AppointmentScheduler({
     reasonAutoRef.current = false;
     setReason(e.target.value);
   }, []);
+
+  // Cambiar profesional/fecha/hora invalida un aviso de solapamiento previo (y su
+  // confirmación): el próximo guardado vuelve a chequear con los datos nuevos.
+  useEffect(() => {
+    setOverlapWarning(null);
+    overlapAckRef.current = false;
+  }, [selectedStaff?.id, date, startTime, endTime]);
 
   // Resolver dueno: Pet.owner_id → VetOwner.contact_id → Contact
   useEffect(() => {
@@ -243,6 +261,34 @@ export function AppointmentScheduler({
       const startAt = localToUTC(date, startTime, tz);
       const endAt = localToUTC(date, endTime, tz);
 
+      // Chequeo de solapamiento (opt-in vía setting): si la clínica no permite turnos
+      // superpuestos y este profesional ya tiene otro turno que se cruza, mostramos un
+      // aviso dentro del form y frenamos el guardado. No bloquea del todo — el banner
+      // ofrece "Agendar de todos modos" (una urgencia se encaja conscientemente).
+      // Se salta si el setting está en "permitir" (default) o si ya se confirmó.
+      if (!apptSettings.allowOverlap && !overlapAckRef.current) {
+        const conflict = await findStaffOverlap({
+          staffId: selectedStaff.id,
+          dayFromUTC: localToUTC(date, '00:00', tz),
+          dayToUTC: localToUTC(date, '23:59', tz),
+          startAtUTC: startAt,
+          endAtUTC: endAt,
+          excludeAppointmentId: editAppointment?.id ?? null,
+        });
+        if (conflict) {
+          const from = conflict.event_start_at ? formatLocalTime(conflict.event_start_at, tz) : '—';
+          const to = conflict.event_end_at ? formatLocalTime(conflict.event_end_at, tz) : '—';
+          const other = conflict.pet_name ? ` con ${conflict.pet_name}` : '';
+          setOverlapWarning(
+            `${selectedStaff.contact_name} ya tiene un turno de ${from} a ${to}${other} ese día.`
+          );
+          return;
+        }
+      }
+      // Consumimos la confirmación: un submit posterior vuelve a chequear.
+      overlapAckRef.current = false;
+      setOverlapWarning(null);
+
       // Recordatorio de turno (opt-in): aviso in-app al equipo, keyed al calendar_event_id
       // del turno para poder cancelarlo/reprogramarlo por entidad (COONG-252) sin guardar ids.
       const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString('es-AR', {
@@ -381,6 +427,7 @@ export function AppointmentScheduler({
       onClose,
       notifications,
       ownerContact,
+      apptSettings.allowOverlap,
     ]
   );
 
@@ -584,6 +631,69 @@ export function AppointmentScheduler({
           onSubmit: handleSubmit,
           style: { display: 'flex', flexDirection: 'column', gap: '16px' },
         },
+
+        // ── Aviso de solapamiento (setting appointments.allowOverlap apagado) ──
+        overlapWarning &&
+          React.createElement(
+            'div',
+            {
+              role: 'alert',
+              style: {
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '10px',
+                padding: '12px 14px',
+                background: 'var(--cg-warning-bg)',
+                border: '1px solid var(--cg-gold-lt)',
+                borderRadius: '8px',
+              },
+            },
+            React.createElement(
+              'span',
+              { style: { flexShrink: 0, marginTop: '1px', lineHeight: 0 } },
+              React.createElement(UI.DynamicIcon, {
+                icon: 'TriangleAlert',
+                size: 16,
+                color: 'var(--cg-warning-text)',
+              })
+            ),
+            React.createElement(
+              'div',
+              {
+                style: {
+                  flex: 1,
+                  minWidth: 0,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '8px',
+                },
+              },
+              React.createElement(
+                'div',
+                { style: { fontSize: '13px', color: 'var(--cg-warning-text)', lineHeight: 1.4 } },
+                React.createElement(
+                  'strong',
+                  { style: { fontWeight: 600 } },
+                  'Turno superpuesto. '
+                ),
+                overlapWarning
+              ),
+              React.createElement(
+                UI.Button,
+                {
+                  type: 'button',
+                  variant: 'outline',
+                  size: 'sm',
+                  onClick: () => {
+                    overlapAckRef.current = true;
+                    setOverlapWarning(null);
+                    formRef.current?.requestSubmit();
+                  },
+                },
+                'Agendar de todos modos'
+              )
+            )
+          ),
 
         // ── 1. Paciente ──
         React.createElement(
