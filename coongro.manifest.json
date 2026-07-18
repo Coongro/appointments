@@ -3,10 +3,7 @@
   "version": "0.6.0",
   "apiVersion": "2.0",
   "assets": {
-    "styles": [
-      "./dist/assets/tailwind.css",
-      "./dist/assets/fontawesome/css/all.min.css"
-    ]
+    "styles": ["./dist/assets/tailwind.css", "./dist/assets/fontawesome/css/all.min.css"]
   },
   "contributes": {
     "menus": [
@@ -34,9 +31,7 @@
       }
     ],
     "settings": {
-      "groups": [
-        { "id": "appointments", "label": "Agenda y turnos", "order": 50 }
-      ],
+      "groups": [{ "id": "appointments", "label": "Agenda y turnos", "order": 50 }],
       "pages": [
         {
           "id": "appointments.general",
@@ -104,6 +99,22 @@
                 { "value": "24", "label": "24 horas antes" }
               ],
               "tags": ["appointments", "reminders", "recordatorio", "turno"]
+            }
+          ]
+        },
+        {
+          "id": "appointments.general.booking",
+          "page": "appointments.general",
+          "label": "Reglas de agenda",
+          "order": 30,
+          "items": [
+            {
+              "key": "appointments.allowOverlap",
+              "type": "boolean",
+              "label": "Permitir turnos superpuestos",
+              "description": "Si está activado, un mismo profesional puede tener dos turnos en el mismo horario sin avisos. Si lo desactivás, al agendar un turno que se cruza con otro del mismo profesional el sistema pide confirmación antes de guardar (útil para clínicas con un solo consultorio por veterinario). Default: permitido.",
+              "default": true,
+              "tags": ["appointments", "agenda", "solapamiento", "superposición", "turno"]
             }
           ]
         }

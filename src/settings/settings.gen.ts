@@ -17,6 +17,13 @@ function toEnum<T extends string>(v: unknown, options: readonly T[], fallback: T
   return typeof v === 'string' && (options as readonly string[]).includes(v) ? (v as T) : fallback;
 }
 
+function toBool(v: unknown, fallback: boolean): boolean {
+  if (typeof v === 'boolean') return v;
+  if (v === 'true') return true;
+  if (v === 'false') return false;
+  return fallback;
+}
+
 export const REMINDERS = {
   off: 'off',
   _1: '1',
@@ -30,6 +37,7 @@ export interface AppointmentsSettingsByKey {
   'appointments.agenda.endHour': number;
   'appointments.agenda.slotMinutes': number;
   'appointments.reminders': 'off' | '1' | '3' | '24';
+  'appointments.allowOverlap': boolean;
 }
 
 /** Settings del plugin con defaults aplicados y coerción por tipo. */
@@ -42,6 +50,8 @@ export interface AppointmentsSettings {
   readonly agendaSlotMinutes: number;
   /** Recordatorio de turno — Avisar en la campana de Coongro antes de cada turno, para que la clínica lo tenga presente y pueda contactar al tutor. El aviso llega al equipo (no al tutor). Default: sin recordatorio. · `appointments.reminders` · default: `"off"` */
   readonly reminders: 'off' | '1' | '3' | '24';
+  /** Permitir turnos superpuestos — Si está activado, un mismo profesional puede tener dos turnos en el mismo horario sin avisos. Si lo desactivás, al agendar un turno que se cruza con otro del mismo profesional el sistema pide confirmación antes de guardar (útil para clínicas con un solo consultorio por veterinario). Default: permitido. · `appointments.allowOverlap` · default: `true` */
+  readonly allowOverlap: boolean;
 }
 
 /** Nombre de prop → key punteada del manifest. */
@@ -50,6 +60,7 @@ export const SETTING_KEYS = {
   agendaEndHour: 'appointments.agenda.endHour',
   agendaSlotMinutes: 'appointments.agenda.slotMinutes',
   reminders: 'appointments.reminders',
+  allowOverlap: 'appointments.allowOverlap',
 } as const;
 
 /** Valores por defecto (los mismos del manifest). */
@@ -58,6 +69,7 @@ export const SETTING_DEFAULTS = {
   'appointments.agenda.endHour': 21,
   'appointments.agenda.slotMinutes': 30,
   'appointments.reminders': 'off',
+  'appointments.allowOverlap': true,
 } as const;
 
 const COERCE: {
@@ -71,6 +83,7 @@ const COERCE: {
     toNum(values['appointments.agenda.slotMinutes'], 30),
   'appointments.reminders': (values) =>
     toEnum(values['appointments.reminders'], ['off', '1', '3', '24'], 'off'),
+  'appointments.allowOverlap': (values) => toBool(values['appointments.allowOverlap'], true),
 };
 
 /** Lee UNA setting tipada desde los valores crudos del tenant (para handlers). */
@@ -88,6 +101,7 @@ export function readAppointmentsSettings(values: Record<string, unknown>): Appoi
     agendaEndHour: COERCE['appointments.agenda.endHour'](values),
     agendaSlotMinutes: COERCE['appointments.agenda.slotMinutes'](values),
     reminders: COERCE['appointments.reminders'](values),
+    allowOverlap: COERCE['appointments.allowOverlap'](values),
   };
 }
 
