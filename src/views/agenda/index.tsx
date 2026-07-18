@@ -7,8 +7,9 @@
 import { CalendarView, EventCard, useTenantTimezone } from '@coongro/calendar';
 import type { CalendarEvent, EventRenderContext } from '@coongro/calendar';
 import { formatLocalTime } from '@coongro/datetime';
-import { getHostReact, getHostUI, actions } from '@coongro/plugin-sdk';
+import { getHostReact, getHostUI, actions, usePlugin } from '@coongro/plugin-sdk';
 
+import { REMINDER_ENTITY_TYPE } from '../../data/reminders.js';
 import { useAppointmentMutations } from '../../hooks/useAppointmentMutations.js';
 import { useAppointments } from '../../hooks/useAppointments.js';
 import type { Appointment } from '../../types/appointment.js';
@@ -24,6 +25,7 @@ const { useState, useCallback, useMemo } = React;
 export function AgendaView(props: Record<string, unknown> = {}) {
   const UI = getHostUI();
   const tz = useTenantTimezone();
+  const { notifications } = usePlugin();
 
   // Fecha inicial opcional (deep-link, ej. desde "Ver turno" de vacunación).
   // Llega como date-key 'yyyy-mm-dd'; se interpreta a medianoche local.
@@ -93,13 +95,17 @@ export function AgendaView(props: Record<string, unknown> = {}) {
           data: { status: 'cancelled' },
         })
         .catch(() => {});
+      // Cancelar el recordatorio agendado del turno (por entidad, sin guardar ids).
+      await notifications
+        .cancelScheduledByEntity(REMINDER_ENTITY_TYPE, confirmCancel.calendar_event_id)
+        .catch(() => 0);
     }
     if (result) {
       setSelectedAppointment(null);
       setConfirmCancel(null);
       void refetch();
     }
-  }, [confirmCancel, updateStatus, refetch]);
+  }, [confirmCancel, updateStatus, refetch, notifications]);
 
   const [confirmNoShow, setConfirmNoShow] = useState<Appointment | null>(null);
 
