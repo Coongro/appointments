@@ -16,6 +16,7 @@ import type { Product, Category } from '@coongro/products';
 import { StaffPicker } from '@coongro/staff';
 import type { StaffMember } from '@coongro/staff';
 
+import { buildTurnoReminder, REMINDER_ENTITY_TYPE } from '../../data/reminders.js';
 import { useAppointmentMutations } from '../../hooks/useAppointmentMutations.js';
 import { useIsMobile } from '../../hooks/useIsMobile.js';
 import type { Appointment } from '../../types/appointment.js';
@@ -43,7 +44,7 @@ export function AppointmentScheduler({
   editAppointment,
 }: SchedulerProps) {
   const UI = getHostUI();
-  const { toast } = usePlugin();
+  const { toast, notifications } = usePlugin();
   const isMobile = useIsMobile();
   const tz = useTenantTimezone();
   const { create, update, creating, updating } = useAppointmentMutations();
@@ -242,6 +243,33 @@ export function AppointmentScheduler({
       const startAt = localToUTC(date, startTime, tz);
       const endAt = localToUTC(date, endTime, tz);
 
+      // Recordatorio de turno (opt-in): aviso in-app al equipo, keyed al calendar_event_id
+      // del turno para poder cancelarlo/reprogramarlo por entidad (COONG-252) sin guardar ids.
+      const dayLabel = new Date(`${date}T00:00:00`).toLocaleDateString('es-AR', {
+        day: '2-digit',
+        month: '2-digit',
+      });
+      const whenLabel = `${dayLabel} ${startTime}`;
+      const syncReminder = async (eventId: string, reschedule: boolean) => {
+        try {
+          if (reschedule) {
+            await notifications.cancelScheduledByEntity(REMINDER_ENTITY_TYPE, eventId);
+          }
+          const pref = (await settings.get<string>('appointments.reminders')) ?? 'off';
+          const reminder = buildTurnoReminder({
+            pref,
+            startAtUTC: startAt,
+            entityId: eventId,
+            whenLabel,
+            petName: selectedPet.name,
+            ownerName: ownerContact?.name ?? null,
+          });
+          if (reminder) await notifications.schedule(reminder);
+        } catch {
+          /* best-effort: el recordatorio nunca bloquea el turno */
+        }
+      };
+
       if (isEditing && editAppointment) {
         // Modo edición: actualizar evento de calendario + appointment
         if (editAppointment.calendar_event_id) {
@@ -267,6 +295,10 @@ export function AppointmentScheduler({
         });
 
         if (result) {
+          // Reprograma el recordatorio (cancela el anterior + agenda con el horario nuevo).
+          if (editAppointment.calendar_event_id) {
+            await syncReminder(editAppointment.calendar_event_id, true);
+          }
           onSuccess?.();
           onClose();
         }
@@ -318,6 +350,9 @@ export function AppointmentScheduler({
           return;
         }
 
+        // Turno creado → agenda el recordatorio (keyed al evento, cancelable por entidad).
+        if (calendarEventId) await syncReminder(calendarEventId, false);
+
         setSelectedPet(null);
         setSelectedStaff(null);
         setOwnerContactId(null);
@@ -344,6 +379,8 @@ export function AppointmentScheduler({
       editAppointment,
       onSuccess,
       onClose,
+      notifications,
+      ownerContact,
     ]
   );
 
