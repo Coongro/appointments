@@ -95,8 +95,14 @@ export class AppointmentRepository {
     } as const;
   }
 
+  /**
+   * Prefijo `_`: el auto-wire del runtime registra como acción RPC todo método
+   * del prototipo salvo el constructor y los que empiezan con `_`. El `private`
+   * de TS se borra al compilar, así que NO alcanza para dejar un helper fuera
+   * de la superficie invocable — hace falta el guion bajo (COONG-268).
+   */
   /* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access */
-  private applyJoins<T>(q: T): T {
+  private _applyJoins<T>(q: T): T {
     return (q as any)
       .leftJoin(contactTable, eq(appointmentTable.contact_id, sql`${contactTable.id}::text`))
       .leftJoin(petTable, eq(appointmentTable.pet_id, sql`${petTable.id}::text`))
@@ -122,7 +128,7 @@ export class AppointmentRepository {
   async getById({ id }: { id: string }): Promise<Appointment | undefined> {
     const rows = await this.db.ormQuery((tx) => {
       const q = tx.select(this.enrichedSelect).from(appointmentTable);
-      return this.applyJoins(q).where(eq(appointmentTable.id, id)).limit(1);
+      return this._applyJoins(q).where(eq(appointmentTable.id, id)).limit(1);
     });
     const row = rows[0] as EnrichedAppointmentRow | undefined;
     return row ? toAppointment(row) : undefined;
@@ -220,7 +226,7 @@ export class AppointmentRepository {
       }
 
       let q = tx.select(this.enrichedSelect).from(appointmentTable);
-      q = this.applyJoins(q);
+      q = this._applyJoins(q);
 
       if (conditions.length > 0) {
         // eslint-disable-next-line @typescript-eslint/no-unsafe-argument
