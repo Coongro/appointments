@@ -1,10 +1,10 @@
 
-> @coongro/appointments@1.0.0 build A:\Coongro2\Coongro\plugins\appointments
+> @coongro/appointments@0.6.0 build A:\Coongro2\Coongro\plugins\appointments
 > npm run build:css && npm run copy:fontawesome && tsc
 
 npm warn config ignoring workspace config at A:\Coongro2\Coongro\plugins\appointments/.npmrc
 
-> @coongro/appointments@1.0.0 build:css
+> @coongro/appointments@0.6.0 build:css
 > tailwindcss -c tailwind.config.cjs -i ./src/styles/tailwind.css -o ./dist/assets/tailwind.css --minify
 
 Browserslist: caniuse-lite is outdated. Please run:
@@ -13,9 +13,9 @@ Browserslist: caniuse-lite is outdated. Please run:
 
 Rebuilding...
 
-Done in 851ms.
+Done in 508ms.
 npm warn config ignoring workspace config at A:\Coongro2\Coongro\plugins\appointments/.npmrc
 
-> @coongro/appointments@1.0.0 copy:fontawesome
+> @coongro/appointments@0.6.0 copy:fontawesome
 > node scripts/copy-fontawesome.cjs
 
