@@ -27,7 +27,19 @@
       {
         "module": "./dist/repositories/appointment.repository.js",
         "export": "AppointmentRepository",
-        "prefix": "appointments"
+        "prefix": "appointments",
+        "actions": [
+          "list",
+          "getById",
+          "create",
+          "update",
+          "delete",
+          "updateStatus",
+          "search",
+          "listToday",
+          "listByStaff",
+          "listByContact"
+        ]
       }
     ],
     "settings": {
